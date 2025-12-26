@@ -1,0 +1,21 @@
+// Fix for isar_flutter_libs namespace and resource issues
+apply plugin: 'com.android.library'
+
+android {
+    if (project.name == 'isar_flutter_libs') {
+        namespace = 'dev.isar.isar_flutter_libs'
+        compileSdk = 34
+        
+        defaultConfig {
+            minSdk = 16
+            targetSdk = 34
+        }
+        
+        configurations.all {
+            resolutionStrategy {
+                force 'androidx.core:core:1.10.1'
+                force 'androidx.core:core-ktx:1.10.1'
+            }
+        }
+    }
+}

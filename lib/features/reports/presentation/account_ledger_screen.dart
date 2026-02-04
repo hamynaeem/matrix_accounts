@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -122,7 +124,12 @@ class _AccountLedgerScreenState extends ConsumerState<AccountLedgerScreen> {
               ),
               prefixIcon: const Icon(Icons.account_balance),
             ),
-            initialValue: _selectedAccount,
+            initialValue: _selectedAccount != null
+                ? accounts.firstWhere(
+                    (account) => account.id == _selectedAccount!.id,
+                    orElse: () => accounts.first,
+                  )
+                : null,
             isExpanded: true,
             items: accounts.map((account) {
               return DropdownMenuItem<Account>(

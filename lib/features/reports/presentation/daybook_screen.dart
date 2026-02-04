@@ -1,6 +1,11 @@
+// ignore_for_file: deprecated_member_use, unused_element_parameter
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
+import 'package:matrix_accounts/data/models/inventory_models.dart' show Product;
+import 'package:matrix_accounts/features/sales/logic/sales_providers.dart'
+    show salesDaoProvider;
 import '../../../core/config/providers.dart';
 import '../../../core/widgets/navigation_drawer_helper.dart';
 import '../../../data/models/transaction_model.dart';
@@ -24,9 +29,7 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Daybook'),
-        backgroundColor: Colors.indigo.shade700,
-      ),
+          title: const Text('Daybook'), backgroundColor: Colors.blueAccent),
       drawer: NavigationDrawerHelper.buildNavigationDrawer(
         context,
         ref: ref,
@@ -209,7 +212,7 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
             children: [
               Expanded(
                 child: _buildSummaryCard(
-                  'Cash Received',
+                  'Payment In (Cash Received)',
                   'Rs. ${data.cashReceived.toStringAsFixed(2)}',
                   Colors.blue,
                   Icons.arrow_downward,
@@ -221,7 +224,7 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildSummaryCard(
-                  'Cash Paid',
+                  'Payment Out (Cash Paid)',
                   'Rs. ${data.cashPaid.toStringAsFixed(2)}',
                   Colors.red,
                   Icons.arrow_upward,
@@ -416,10 +419,192 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          ...data.transactions.map((txn) => _buildTransactionCard(txn)),
+          ...data.transactions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final txn = entry.value;
+            return _buildSwipeableTransactionCard(txn, index, context);
+          }),
         ],
       ),
     );
+  }
+
+  Widget _buildSwipeableTransactionCard(
+      _DaybookTransaction txn, int index, BuildContext context) {
+    return Dismissible(
+      key: Key('${txn.type}_${txn.referenceNo}_$index'),
+      direction: DismissDirection.startToEnd,
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.delete_outline,
+              color: Colors.white,
+              size: 28,
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+      confirmDismiss: (direction) => _confirmDelete(context, txn),
+      onDismissed: (direction) {
+        _deleteTransaction(txn);
+      },
+      child: _buildTransactionCard(txn),
+    );
+  }
+
+  Future<bool?> _confirmDelete(BuildContext context, _DaybookTransaction txn) {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Transaction'),
+          content: Text(
+            'Are you sure you want to delete this ${txn.type.toLowerCase()} transaction for ${txn.partyName}?\n\nAmount: Rs. ${txn.amount.toStringAsFixed(2)}\nThis action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteTransaction(_DaybookTransaction txn) async {
+    try {
+      final isar = ref.read(isarServiceProvider).isar;
+
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleting ${txn.type.toLowerCase()}...'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      switch (txn.type) {
+        case 'Sale':
+          if (txn.invoiceId != null) {
+            final salesDao = ref.read(salesDaoProvider);
+            await salesDao.deleteSaleInvoice(txn.invoiceId!);
+          }
+          break;
+        case 'Purchase':
+          if (txn.invoiceId != null) {
+            await isar.writeTxn(() async {
+              final invoice = await isar.invoices.get(txn.invoiceId!);
+              if (invoice != null) {
+                // Delete all related account transactions first
+                final accountTxns = await isar.accountTransactions
+                    .filter()
+                    .referenceIdEqualTo(txn.invoiceId!)
+                    .findAll();
+                for (final accTxn in accountTxns) {
+                  await isar.accountTransactions.delete(accTxn.id);
+                }
+
+                // Delete stock ledger entries
+                final stocks = await isar.stockLedgers
+                    .filter()
+                    .invoiceIdEqualTo(txn.invoiceId!)
+                    .findAll();
+                for (final stock in stocks) {
+                  await isar.stockLedgers.delete(stock.id);
+                }
+
+                // Delete transaction lines
+                final lines = await isar.transactionLines
+                    .filter()
+                    .transactionIdEqualTo(invoice.transactionId)
+                    .findAll();
+                for (final line in lines) {
+                  await isar.transactionLines.delete(line.id);
+                }
+
+                // Delete transaction
+                await isar.transactions.delete(invoice.transactionId);
+                // Delete invoice
+                await isar.invoices.delete(txn.invoiceId!);
+              }
+            });
+          }
+          break;
+        case 'Cash Receipt':
+        case 'Cash Payment':
+          if (txn.transactionId != null) {
+            await isar.writeTxn(() async {
+              // Delete all related account transactions
+              final accountTransactions = await isar.accountTransactions
+                  .filter()
+                  .referenceIdEqualTo(txn.transactionId!)
+                  .findAll();
+              for (final accTxn in accountTransactions) {
+                await isar.accountTransactions.delete(accTxn.id);
+              }
+              // Delete main transaction if it exists
+              final mainTxn = await isar.transactions.get(txn.transactionId!);
+              if (mainTxn != null) {
+                await isar.transactions.delete(txn.transactionId!);
+              }
+            });
+          }
+          break;
+      }
+
+      // Refresh the data and show success message
+      if (mounted) {
+        setState(() {
+          // Force complete data reload by reassigning the date
+          // This ensures FutureBuilder rebuilds with fresh data
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${txn.type} deleted successfully - Records updated'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting transaction: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildTransactionCard(_DaybookTransaction txn) {
@@ -441,12 +626,12 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
       case 'Cash Receipt':
         color = Colors.blue;
         icon = Icons.arrow_downward;
-        typeLabel = 'CASH IN';
+        typeLabel = 'PAYMENT IN';
         break;
       case 'Cash Payment':
         color = Colors.red;
         icon = Icons.arrow_upward;
-        typeLabel = 'CASH OUT';
+        typeLabel = 'PAYMENT OUT';
         break;
       default:
         color = Colors.grey;
@@ -455,25 +640,25 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
     }
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 1,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: color.withOpacity(0.2)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(icon, color: color, size: 24),
+                  child: Icon(icon, color: color, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -484,38 +669,55 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: color,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(3),
                             ),
                             child: Text(
                               typeLabel,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            txn.referenceNo,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
+                          if ((txn.type == 'Sale' || txn.type == 'Purchase') &&
+                              txn.totalQty != null &&
+                              txn.totalQty! > 0) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '${txn.totalQty!.toStringAsFixed(0)} items',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         txn.partyName,
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
+                      if (txn.referenceNo.isNotEmpty &&
+                          txn.referenceNo != 'N/A') ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          'Ref: ${txn.referenceNo}',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.grey.shade500,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
                       if (txn.description.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
@@ -533,17 +735,18 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Rs. ${txn.amount.toStringAsFixed(2)}',
+                      'Rs. ${txn.amount.toStringAsFixed(0)}',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                         color: color,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       _formatTime(txn.date),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 9,
                         color: Colors.grey.shade500,
                       ),
                     ),
@@ -551,38 +754,96 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
                 ),
               ],
             ),
-            if (txn.cashAmount > 0) ...[
-              const SizedBox(height: 12),
+            // Show compact line items for sales and purchases
+            if ((txn.type == 'Sale' || txn.type == 'Purchase') &&
+                txn.lineItems != null &&
+                txn.lineItems!.isNotEmpty) ...[
+              const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(6),
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.payments, size: 16, color: Colors.grey.shade700),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Cash: Rs. ${txn.cashAmount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                    if (txn.accountName.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '(${txn.accountName})',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade600,
+                    ...txn.lineItems!.take(5).map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  item.productName,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  '${item.quantity.toStringAsFixed(0)}×${item.unitPrice.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              Text(
+                                '=${item.lineAmount.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                    if (txn.lineItems!.length > 5)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '+${txn.lineItems!.length - 5} more items',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.grey.shade500,
+                          ),
                         ),
                       ),
-                    ],
                   ],
                 ),
+              ),
+            ],
+            if (txn.cashAmount > 0) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.payments, size: 12, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Cash: Rs. ${txn.cashAmount.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  if (txn.accountName.isNotEmpty) ...[
+                    Text(
+                      ' (${txn.accountName})',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ],
@@ -667,6 +928,34 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
         }
       }
 
+      // Get transaction lines for quantity and rate information
+      final transactionLines = await isar
+          .collection<TransactionLine>()
+          .filter()
+          .transactionIdEqualTo(sale.id)
+          .findAll();
+
+      double totalQty = 0;
+      final List<TransactionLineInfo> lineItems = [];
+
+      for (final line in transactionLines) {
+        totalQty += line.quantity;
+
+        // Get product name
+        String productName = 'Unknown Product';
+        if (line.productId != null && line.productId != 0) {
+          final product = await isar.collection<Product>().get(line.productId!);
+          productName = product?.name ?? 'Product ID: ${line.productId}';
+        }
+
+        lineItems.add(TransactionLineInfo(
+          productName: productName,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          lineAmount: line.lineAmount,
+        ));
+      }
+
       transactions.add(_DaybookTransaction(
         type: 'Sale',
         referenceNo: sale.referenceNo,
@@ -676,6 +965,8 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
         date: sale.date,
         description: '',
         accountName: accountName,
+        totalQty: totalQty,
+        lineItems: lineItems,
       ));
     }
 
@@ -737,6 +1028,34 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
         }
       }
 
+      // Get transaction lines for quantity and rate information
+      final transactionLines = await isar
+          .collection<TransactionLine>()
+          .filter()
+          .transactionIdEqualTo(purchase.id)
+          .findAll();
+
+      double totalQty = 0;
+      final List<TransactionLineInfo> lineItems = [];
+
+      for (final line in transactionLines) {
+        totalQty += line.quantity;
+
+        // Get product name
+        String productName = 'Unknown Product';
+        if (line.productId != null && line.productId != 0) {
+          final product = await isar.collection<Product>().get(line.productId!);
+          productName = product?.name ?? 'Product ID: ${line.productId}';
+        }
+
+        lineItems.add(TransactionLineInfo(
+          productName: productName,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          lineAmount: line.lineAmount,
+        ));
+      }
+
       transactions.add(_DaybookTransaction(
         type: 'Purchase',
         referenceNo: purchase.referenceNo,
@@ -746,6 +1065,8 @@ class _DaybookScreenState extends ConsumerState<DaybookScreen> {
         date: purchase.date,
         description: '',
         accountName: accountName,
+        totalQty: totalQty,
+        lineItems: lineItems,
       ));
     }
 
@@ -895,6 +1216,10 @@ class _DaybookTransaction {
   final DateTime date;
   final String description;
   final String accountName;
+  final int? transactionId;
+  final int? invoiceId;
+  final double? totalQty;
+  final List<TransactionLineInfo>? lineItems;
 
   _DaybookTransaction({
     required this.type,
@@ -905,5 +1230,23 @@ class _DaybookTransaction {
     required this.date,
     required this.description,
     required this.accountName,
+    this.transactionId,
+    this.invoiceId,
+    this.totalQty,
+    this.lineItems,
+  });
+}
+
+class TransactionLineInfo {
+  final String productName;
+  final double quantity;
+  final double unitPrice;
+  final double lineAmount;
+
+  TransactionLineInfo({
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.lineAmount,
   });
 }

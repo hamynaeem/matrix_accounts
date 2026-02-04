@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,12 +17,8 @@ class ProductFormScreen extends ConsumerStatefulWidget {
 
 class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _nameCtrl = TextEditingController();
-  final _skuCtrl = TextEditingController();
-  final _saleCtrl = TextEditingController();
-  final _costCtrl = TextEditingController();
   final _openingCtrl = TextEditingController();
 
-  ItemCategory? _category;
   UnitOfMeasure? _uom;
   bool _trackStock = true;
 
@@ -30,11 +28,28 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final p = widget.product;
     if (p != null) {
       _nameCtrl.text = p.name;
-      _skuCtrl.text = p.sku;
-      _saleCtrl.text = p.salePrice.toString();
-      _costCtrl.text = p.lastCost.toString();
       _openingCtrl.text = p.openingQty.toString();
       _trackStock = p.isTracked;
+
+      // Load unit data
+      _loadProductData(p);
+    }
+  }
+
+  Future<void> _loadProductData(Product product) async {
+    final unitAsync = ref.read(productUnitProvider);
+
+    unitAsync.whenData((units) {
+      if (product.uomId != null) {
+        _uom = units.firstWhere(
+          (unit) => unit.id == product.uomId,
+          orElse: () => units.first,
+        );
+      }
+    });
+
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -43,11 +58,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final company = ref.read(currentCompanyProvider)!;
     final dao = ref.read(productMasterDaoProvider);
 
-    final catAsync = ref.watch(productCategoryProvider);
     final unitAsync = ref.watch(productUnitProvider);
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.blueAccent,
         title: const Text('Product'),
         elevation: 0,
         leading: IconButton(
@@ -75,25 +90,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           children: [
             _field(_nameCtrl, 'Product Name'),
             const SizedBox(height: 16),
-            _field(_skuCtrl, 'SKU'),
-            const SizedBox(height: 16),
-            catAsync.when(
-              data: (cats) => DropdownButtonFormField<ItemCategory>(
-                initialValue: _category,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                items: cats
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v),
-              ),
-              loading: () => const CircularProgressIndicator(),
-              error: (_, __) => const Text('Category error'),
-            ),
-            const SizedBox(height: 8),
             unitAsync.when(
               data: (units) => DropdownButtonFormField<UnitOfMeasure>(
                 initialValue: _uom,
@@ -112,15 +108,22 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               error: (_, __) => const Text('UOM error'),
             ),
             const SizedBox(height: 8),
-            _field(_saleCtrl, 'Sale Price', isNumber: true),
-            const SizedBox(height: 8),
-            _field(_costCtrl, 'Cost Price', isNumber: true),
-            const SizedBox(height: 8),
-            _field(_openingCtrl, 'Opening Stock', isNumber: true),
+            if (_trackStock) ...[
+              _field(_openingCtrl, 'Opening Stock', isNumber: true),
+              const SizedBox(height: 8),
+            ],
             SwitchListTile(
               dense: true,
               value: _trackStock,
-              onChanged: (v) => setState(() => _trackStock = v),
+              onChanged: (v) {
+                setState(() {
+                  _trackStock = v;
+                  // Clear opening stock when stock tracking is disabled
+                  if (!v) {
+                    _openingCtrl.clear();
+                  }
+                });
+              },
               title: const Text('Track Stock'),
             ),
             const SizedBox(height: 12),
@@ -132,17 +135,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
                   p.companyId = company.id;
                   p.name = _nameCtrl.text.trim();
-                  p.sku = _skuCtrl.text.trim();
-                  p.salePrice = double.tryParse(_saleCtrl.text) ?? 0;
-                  p.lastCost = double.tryParse(_costCtrl.text) ?? 0;
+                  p.sku = '';
+                  p.salePrice = 0;
+                  p.lastCost = 0;
                   p.isTracked = _trackStock;
                   p.openingQty = double.tryParse(_openingCtrl.text) ?? 0;
-                  p.categoryId = _category?.id;
+                  p.categoryId = null;
                   p.uomId = _uom?.id;
 
                   await dao.saveProduct(p);
 
-                  if (widget.product == null && p.openingQty > 0) {
+                  if (widget.product == null &&
+                      _trackStock &&
+                      p.openingQty > 0) {
                     await dao.insertOpeningStock(
                       companyId: company.id,
                       productId: p.id,
@@ -167,6 +172,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     return TextField(
       controller: c,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      onChanged: label == 'Opening Stock'
+          ? (value) {
+              // Automatically enable stock tracking if opening stock is entered
+              if (value.isNotEmpty &&
+                  double.tryParse(value) != null &&
+                  double.tryParse(value)! > 0) {
+                if (!_trackStock) {
+                  setState(() => _trackStock = true);
+                }
+              }
+            }
+          : null,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),

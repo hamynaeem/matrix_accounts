@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously, avoid_print
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,6 +14,7 @@ import '../../../data/models/payment_models.dart';
 import '../../../data/models/user_model.dart';
 import '../../parties/presentation/party_selection_screen.dart';
 import '../logic/payment_providers.dart';
+import '../services/payment_out_receipt_generator.dart';
 
 class PaymentLineDraft {
   int? accountId;
@@ -215,7 +218,7 @@ class _PaymentOutFormScreenState extends ConsumerState<PaymentOutFormScreen> {
       appBar: AppBar(
         title: Text(
             widget.paymentOutId != null ? 'Edit Payment Out' : 'Payment-Out'),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: Colors.blueAccent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -589,6 +592,31 @@ class _PaymentOutFormScreenState extends ConsumerState<PaymentOutFormScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              if (widget.paymentOutId != null)
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await _sharePaymentOut(paymentDao, company);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.share, color: Colors.white),
+                        label: const Text(
+                          'Save & Share Receipt',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 100),
             ],
           ),
@@ -988,6 +1016,54 @@ class _PaymentOutFormScreenState extends ConsumerState<PaymentOutFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error saving payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sharePaymentOut(PaymentDao paymentDao, Company company) async {
+    try {
+      if (widget.paymentOutId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please save payment first'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final payment = await paymentDao.getPaymentOutById(widget.paymentOutId!);
+      if (payment == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final lines = await paymentDao.getPaymentOutLines(widget.paymentOutId!);
+
+      if (mounted) {
+        await PaymentOutReceiptGenerator.shareReceipt(
+          context: context,
+          company: company,
+          supplier: _selectedSupplier!,
+          payment: payment,
+          lines: lines,
+          totalAmount: _totalPaid,
+          imagePath: _selectedImagePath,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sharing payment: $e'),
             backgroundColor: Colors.red,
           ),
         );

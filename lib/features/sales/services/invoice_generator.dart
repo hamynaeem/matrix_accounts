@@ -1,12 +1,14 @@
+// ignore_for_file: avoid_print, unused_element
+
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 import '../../../data/models/company_model.dart';
@@ -15,8 +17,79 @@ import '../../../data/models/party_model.dart';
 import '../../../data/models/transaction_model.dart';
 
 class InvoiceGenerator {
-  static final _dateFormat = DateFormat('dd MMM, yyyy');
+  static final _dateFormat = DateFormat('dd MMM, yyyy hh:mm a');
   static final _currencyFormat = NumberFormat('#,##,##0.00');
+
+  // Helper method to calculate total paid amount
+  static double _calculateTotalPaid(List<Map<String, dynamic>>? paymentLines) {
+    if (paymentLines == null || paymentLines.isEmpty) {
+      print('=== PAYMENT CALCULATION DEBUG ===');
+      print('No payment lines provided');
+      print('Final totalPaid: 0.0');
+      print('================================');
+      return 0.0;
+    }
+
+    double totalPaid = 0.0;
+    print('=== PAYMENT CALCULATION DEBUG ===');
+    print('paymentLines input: $paymentLines');
+
+    // Track accounts to avoid double counting
+    Set<String> processedAccounts = <String>{};
+
+    for (int i = 0; i < paymentLines.length; i++) {
+      final paymentLine = paymentLines[i];
+      print('Payment line $i: $paymentLine');
+
+      // Get account name for deduplication
+      final accountName = paymentLine['accountName']?.toString() ?? 'Unknown';
+
+      // Try different possible key names for amount
+      dynamic amountValue = paymentLine['amount'] ??
+          paymentLine['paid_amount'] ??
+          paymentLine['paymentAmount'] ??
+          0;
+
+      print(
+          'Account: $accountName, Amount raw value: $amountValue (${amountValue.runtimeType})');
+
+      // Handle different number types more robustly
+      double paymentAmount = 0.0;
+      if (amountValue is double) {
+        paymentAmount = amountValue;
+      } else if (amountValue is int) {
+        paymentAmount = amountValue.toDouble();
+      } else if (amountValue is num) {
+        paymentAmount = amountValue.toDouble();
+      } else if (amountValue is String && amountValue.isNotEmpty) {
+        paymentAmount = double.tryParse(amountValue) ?? 0.0;
+      }
+
+      // Only add positive amounts and avoid duplicate accounts
+      if (paymentAmount > 0) {
+        // For same account type, use the latest/highest amount (avoid duplicates)
+        if (processedAccounts.contains(accountName)) {
+          print(
+              'Duplicate account $accountName found, skipping or updating...');
+          // Skip duplicate - the latest entry should be the correct one
+          continue;
+        }
+
+        processedAccounts.add(accountName);
+        totalPaid += paymentAmount;
+        print(
+            'Added payment: $accountName = $paymentAmount, running total: $totalPaid');
+      } else {
+        print(
+            'Skipping zero or negative payment: $accountName = $paymentAmount');
+      }
+    }
+
+    print('Final totalPaid: $totalPaid');
+    print('Processed accounts: $processedAccounts');
+    print('================================');
+    return totalPaid;
+  }
 
   // Generate invoice as image
   static Future<Uint8List> generateInvoiceImage({
@@ -27,8 +100,27 @@ class InvoiceGenerator {
     required List<Map<String, dynamic>>
         lineItems, // product name, qty, rate, amount
     List<Map<String, dynamic>>? paymentLines,
+    double? customerBalance,
+    double? openingBalance,
   }) async {
     try {
+      // Debug: Print opening balance parameter
+      print('=== OPENING BALANCE DEBUG ===');
+      print('openingBalance parameter: $openingBalance');
+      print('============================');
+
+      // Debug: Print payment lines data
+      print('=== PAYMENT LINES DEBUG ===');
+      print('paymentLines parameter: $paymentLines');
+      if (paymentLines != null && paymentLines.isNotEmpty) {
+        for (int i = 0; i < paymentLines.length; i++) {
+          print('Payment $i: ${paymentLines[i]}');
+        }
+      } else {
+        print('No payment lines provided or empty');
+      }
+      print('===============================');
+
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
       const size = Size(800, 1400);
@@ -54,23 +146,6 @@ class InvoiceGenerator {
             fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
       );
 
-      // Invoice ID
-      _drawText(
-        canvas,
-        invoice.id.toString(),
-        const Offset(40, 75),
-        TextStyle(fontSize: 14, color: Colors.grey.shade600),
-      );
-
-      // Title
-      _drawText(
-        canvas,
-        'Sales Invoice',
-        const Offset(300, 150),
-        const TextStyle(
-            fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black87),
-      );
-
       // Customer details
       _drawText(
         canvas,
@@ -86,25 +161,20 @@ class InvoiceGenerator {
             fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black87),
       );
 
-      // Invoice No
-      _drawText(
-        canvas,
-        'Invoice No.',
-        const Offset(600, 220),
-        TextStyle(fontSize: 14, color: Colors.grey.shade600),
-      );
-      _drawText(
-        canvas,
-        transaction.referenceNo,
-        const Offset(600, 245),
-        const TextStyle(
-            fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black87),
-      );
+      // Phone number
+      if (party.phone != null && party.phone!.isNotEmpty) {
+        _drawText(
+          canvas,
+          'Phone: ${party.phone}',
+          const Offset(40, 270),
+          TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        );
+      }
 
-      // Date
+      // Date & Time
       _drawText(
         canvas,
-        'Date: ${_dateFormat.format(invoice.invoiceDate)}',
+        'Date & Time: ${_dateFormat.format(invoice.invoiceDate)}',
         const Offset(600, 280),
         const TextStyle(fontSize: 14, color: Colors.black87),
       );
@@ -118,15 +188,39 @@ class InvoiceGenerator {
         ..style = PaintingStyle.fill;
       canvas.drawRect(Rect.fromLTWH(40, yPos, 720, 35), headerPaint);
 
-      // Table headers
-      _drawText(canvas, 'Item', Offset(50, yPos + 8),
-          const TextStyle(fontSize: 14, fontWeight: FontWeight.bold));
-      _drawText(canvas, 'Qty', Offset(410, yPos + 8),
-          const TextStyle(fontSize: 14, fontWeight: FontWeight.bold));
-      _drawText(canvas, 'Rate', Offset(510, yPos + 8),
-          const TextStyle(fontSize: 14, fontWeight: FontWeight.bold));
-      _drawText(canvas, 'Amount', Offset(660, yPos + 8),
-          const TextStyle(fontSize: 14, fontWeight: FontWeight.bold));
+      // Table headers with better alignment
+      _drawText(
+          canvas,
+          'Item',
+          Offset(50, yPos + 8),
+          const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87));
+      _drawText(
+          canvas,
+          'Qty',
+          Offset(430, yPos + 8),
+          const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87));
+      _drawText(
+          canvas,
+          'Rate',
+          Offset(520, yPos + 8),
+          const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87));
+      _drawText(
+          canvas,
+          'Amount',
+          Offset(640, yPos + 8),
+          const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87));
 
       yPos += 35;
 
@@ -139,6 +233,7 @@ class InvoiceGenerator {
 
       // Items
       double subTotal = 0;
+      double totalQuantity = 0;
 
       // Debug: Print lineItems data
       print('=== LINE ITEMS DEBUG ===');
@@ -185,27 +280,68 @@ class InvoiceGenerator {
 
           final amount = qty * rate;
           subTotal += amount;
+          totalQuantity += qty;
 
           print(
               'Rendering: $productName, Qty: $qty, Rate: $rate, Amount: $amount');
+          print('Running subtotal: $subTotal');
 
           canvas.drawLine(Offset(40, yPos), Offset(760, yPos), borderPaint);
 
+          // Item name (left aligned)
           _drawText(canvas, productName, Offset(50, yPos + 8),
               const TextStyle(fontSize: 13, color: Colors.black87));
-          _drawText(canvas, qty.toStringAsFixed(0), Offset(410, yPos + 8),
+
+          // Quantity (right aligned)
+          final qtyText = qty == qty.roundToDouble()
+              ? qty.toStringAsFixed(0)
+              : qty.toStringAsFixed(2);
+          _drawRightAlignedText(canvas, qtyText, Offset(480, yPos + 8),
               const TextStyle(fontSize: 13, color: Colors.black87));
-          _drawText(canvas, _currencyFormat.format(rate), Offset(510, yPos + 8),
+
+          // Rate (right aligned)
+          _drawRightAlignedText(
+              canvas,
+              _currencyFormat.format(rate),
+              Offset(600, yPos + 8),
               const TextStyle(fontSize: 13, color: Colors.black87));
-          _drawText(
+
+          // Amount (right aligned)
+          _drawRightAlignedText(
               canvas,
               _currencyFormat.format(amount),
-              Offset(660, yPos + 8),
+              Offset(750, yPos + 8),
               const TextStyle(fontSize: 13, color: Colors.black87));
 
           yPos += 30;
         }
       }
+
+      // Add total row to match invoice screenshot
+      final totalBgPaint = Paint()
+        ..color = Colors.grey.shade200
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRect(Rect.fromLTWH(40, yPos, 720, 30), totalBgPaint);
+
+      _drawText(
+          canvas,
+          'Total',
+          Offset(50, yPos + 8),
+          const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87));
+      _drawRightAlignedText(
+          canvas,
+          'Rs ${_currencyFormat.format(subTotal)}',
+          Offset(750, yPos + 8),
+          const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87));
+
+      yPos += 30;
 
       // Bottom border
       canvas.drawLine(Offset(40, yPos), Offset(760, yPos), borderPaint);
@@ -225,137 +361,230 @@ class InvoiceGenerator {
       // Bottom border (already drawn above)
       // Top border (already drawn for header)
 
+      // Display totals as separate sections - clean styling
       yPos += 20;
 
-      // Amounts section
-      final amountBoxPaint = Paint()
-        ..color = Colors.grey.shade200
+      // Total Quantity Section
+      final totalQtyBoxPaint = Paint()
+        ..color = Colors.blue.shade50
         ..style = PaintingStyle.fill;
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(40, yPos, 720, 100),
-          const Radius.circular(12),
+          Rect.fromLTWH(40, yPos, 300, 40),
+          const Radius.circular(6),
         ),
-        amountBoxPaint,
+        totalQtyBoxPaint,
       );
 
-      final amountBorderPaint = Paint()
-        ..color = Colors.grey.shade300
+      final totalQtyBorderPaint = Paint()
+        ..color = Colors.blue.shade300
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
+        ..strokeWidth = 1.5;
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(40, yPos, 720, 100),
-          const Radius.circular(12),
+          Rect.fromLTWH(40, yPos, 300, 40),
+          const Radius.circular(6),
         ),
-        amountBorderPaint,
+        totalQtyBorderPaint,
       );
 
-      _drawText(canvas, 'Sub Total', Offset(500, yPos + 20),
-          const TextStyle(fontSize: 14));
-      _drawText(canvas, 'Rs ${_currencyFormat.format(subTotal)}',
-          Offset(650, yPos + 20), const TextStyle(fontSize: 14));
+      _drawText(
+          canvas,
+          'Total Quantity',
+          Offset(55, yPos + 8),
+          const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87));
+      _drawRightAlignedText(
+          canvas,
+          totalQuantity == totalQuantity.roundToDouble()
+              ? totalQuantity.toStringAsFixed(0)
+              : totalQuantity.toStringAsFixed(2),
+          Offset(325, yPos + 22),
+          const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black));
+
+      // Total Amount Section
+      final totalAmountBoxPaint = Paint()
+        ..color = Colors.orange.shade50
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(460, yPos, 300, 40),
+          const Radius.circular(6),
+        ),
+        totalAmountBoxPaint,
+      );
+
+      final totalAmountBorderPaint = Paint()
+        ..color = Colors.orange.shade300
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(460, yPos, 300, 40),
+          const Radius.circular(6),
+        ),
+        totalAmountBorderPaint,
+      );
 
       _drawText(
           canvas,
-          'Grand Total',
-          Offset(500, yPos + 55),
+          'Total Amount',
+          Offset(475, yPos + 8),
           const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2196F3)));
-      _drawText(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87));
+      _drawRightAlignedText(
           canvas,
-          'Rs ${_currencyFormat.format(invoice.grandTotal)}',
-          Offset(650, yPos + 55),
+          'Rs ${_currencyFormat.format(subTotal)}',
+          Offset(745, yPos + 22),
           const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2196F3)));
+              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black));
 
-      yPos += 120;
+      yPos += 60;
 
-      // Payment details section if available
-      if (paymentLines != null && paymentLines.isNotEmpty) {
-        _drawText(canvas, 'Payment Details', Offset(40, yPos),
-            const TextStyle(fontSize: 18, fontWeight: FontWeight.bold));
+      // Calculate total paid amount using helper method
+      double totalPaid = _calculateTotalPaid(paymentLines);
+
+      // Customer Opening Balance - Separate Section
+      if (openingBalance != null) {
+        // Section title
+        _drawText(
+            canvas,
+            'Customer Opening Balance',
+            Offset(40, yPos),
+            const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black));
         yPos += 30;
 
-        final paymentBoxPaint = Paint()
-          ..color = Colors.green.shade50
+        // Opening balance container
+        final openingBoxPaint = Paint()
+          ..color = Colors.blue.shade50
           ..style = PaintingStyle.fill;
 
-        double paymentBoxHeight = 60 + (paymentLines.length * 30.0);
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(40, yPos, 720, paymentBoxHeight),
-            const Radius.circular(12),
+            Rect.fromLTWH(40, yPos, 720, 50),
+            const Radius.circular(6),
           ),
-          paymentBoxPaint,
+          openingBoxPaint,
         );
+
+        final openingBorderPaint = Paint()
+          ..color = Colors.blue.shade300
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
 
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(40, yPos, 720, paymentBoxHeight),
-            const Radius.circular(12),
+            Rect.fromLTWH(40, yPos, 720, 50),
+            const Radius.circular(6),
           ),
-          amountBorderPaint,
+          openingBorderPaint,
         );
 
-        _drawText(canvas, 'Cash Receipt', Offset(60, yPos + 15),
-            const TextStyle(fontSize: 16, fontWeight: FontWeight.w600));
-        yPos += 40;
+        _drawText(canvas, 'Opening Balance:', Offset(60, yPos + 15),
+            const TextStyle(fontSize: 14, color: Colors.black87));
 
-        double totalPaid = 0;
-        for (final payment in paymentLines) {
-          final accountName = payment['accountName'] as String? ?? 'Unknown';
-          final amount = payment['amount'] as double? ?? 0;
-          totalPaid += amount;
-
-          _drawText(canvas, accountName, Offset(80, yPos),
-              const TextStyle(fontSize: 14));
-          _drawText(canvas, 'Rs ${_currencyFormat.format(amount)}',
-              Offset(650, yPos), const TextStyle(fontSize: 14));
-          yPos += 25;
-        }
-
-        yPos += 10;
         _drawText(
             canvas,
-            'Total Paid',
-            Offset(500, yPos),
+            openingBalance >= 0
+                ? 'Credit: Rs ${_currencyFormat.format(openingBalance.abs())}'
+                : 'Due: Rs ${_currencyFormat.format(openingBalance.abs())}',
+            Offset(500, yPos + 15),
             const TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF4CAF50)));
-        _drawText(
-            canvas,
-            'Rs ${_currencyFormat.format(totalPaid)}',
-            Offset(650, yPos),
-            const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF4CAF50)));
+                color: Colors.black));
 
-        yPos += 35;
-        final due = invoice.grandTotal - totalPaid;
-        _drawText(
-            canvas,
-            'Due Amount',
-            Offset(500, yPos),
-            const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFFF5722)));
-        _drawText(
-            canvas,
-            'Rs ${_currencyFormat.format(due)}',
-            Offset(650, yPos),
-            const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFFF5722)));
+        yPos += 80; // Space after opening balance
       }
+
+      // Payment Summary - Separate Section
+      _drawText(
+          canvas,
+          'Payment Summary',
+          Offset(40, yPos),
+          const TextStyle(
+              fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black));
+      yPos += 30;
+
+      // Simple Payment Summary Box
+      final summaryBoxPaint = Paint()
+        ..color = Colors.grey.shade100
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(40, yPos, 720, 120),
+          const Radius.circular(4),
+        ),
+        summaryBoxPaint,
+      );
+
+      final summaryBorderPaint = Paint()
+        ..color = Colors.grey.shade400
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(40, yPos, 720, 120),
+          const Radius.circular(4),
+        ),
+        summaryBorderPaint,
+      );
+
+      yPos += 20;
+
+      // Total Amount - use calculated subtotal instead of stored grandTotal for accuracy
+      final calculatedTotal =
+          subTotal; // Use calculated subtotal from line items
+      print(
+          'Using calculated total: $calculatedTotal vs stored grandTotal: ${invoice.grandTotal}');
+
+      _drawText(canvas, 'Total Amount:', Offset(60, yPos),
+          const TextStyle(fontSize: 14, color: Colors.black87));
+      _drawText(
+          canvas,
+          'Rs ${_currencyFormat.format(calculatedTotal)}',
+          Offset(600, yPos),
+          const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black));
+      yPos += 25;
+
+      // Paid Amount - simple styling
+      _drawText(canvas, 'Paid Amount:', Offset(60, yPos),
+          const TextStyle(fontSize: 14, color: Colors.black87));
+      _drawText(
+          canvas,
+          'Rs ${_currencyFormat.format(totalPaid)}',
+          Offset(600, yPos),
+          const TextStyle(fontSize: 14, color: Colors.black));
+      yPos += 25;
+
+      // Balance Amount - use calculated total for accurate balance
+      final due = calculatedTotal - totalPaid;
+      print('Balance calculation: $calculatedTotal - $totalPaid = $due');
+      _drawText(canvas, 'Balance Amount:', Offset(60, yPos),
+          const TextStyle(fontSize: 14, color: Colors.black87));
+      _drawText(
+          canvas,
+          due > 0 ? 'Rs ${_currencyFormat.format(due)}' : 'FULLY PAID',
+          Offset(600, yPos),
+          const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black));
+
+      yPos += 40;
 
       final picture = recorder.endRecording();
       final img =
@@ -375,307 +604,6 @@ class InvoiceGenerator {
     }
   }
 
-  // Generate invoice as PDF
-  static Future<Uint8List> generateInvoicePdf({
-    required Company company,
-    required Party party,
-    required Invoice invoice,
-    required Transaction transaction,
-    required List<Map<String, dynamic>> lineItems,
-    List<Map<String, dynamic>>? paymentLines,
-  }) async {
-    final pdf = pw.Document();
-
-    // Build items table
-    List<pw.TableRow> itemRows = [
-      pw.TableRow(
-        decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-        children: [
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(8),
-            child: pw.Text('Item',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(8),
-            child: pw.Text('Qty',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(8),
-            child: pw.Text('Rate',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(8),
-            child: pw.Text('Amount',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          ),
-        ],
-      ),
-    ];
-
-    double subTotal = 0;
-    for (final line in lineItems) {
-      final productName = line['productName'] as String? ?? 'Unknown Product';
-      final qty = line['qty'] as double? ?? 0;
-      final rate = line['rate'] as double? ?? 0;
-      final amount = qty * rate;
-      subTotal += amount;
-
-      itemRows.add(
-        pw.TableRow(
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(8),
-              child: pw.Text(productName),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(8),
-              child: pw.Text(qty.toStringAsFixed(2)),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(8),
-              child: pw.Text(_currencyFormat.format(rate)),
-            ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.all(8),
-              child: pw.Text(_currencyFormat.format(amount)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // Header
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        company.name,
-                        style: pw.TextStyle(
-                            fontSize: 24, fontWeight: pw.FontWeight.bold),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        invoice.id.toString(),
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.grey700),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text(
-                        'GENERATED ON',
-                        style: const pw.TextStyle(
-                            fontSize: 10, color: PdfColors.grey600),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 30),
-
-              // Title
-              pw.Center(
-                child: pw.Text(
-                  'Sales Invoice',
-                  style: pw.TextStyle(
-                      fontSize: 32, fontWeight: pw.FontWeight.bold),
-                ),
-              ),
-              pw.SizedBox(height: 30),
-
-              // Details
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'Bill To:',
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.grey700),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        party.name,
-                        style: pw.TextStyle(
-                            fontSize: 18, fontWeight: pw.FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text(
-                        'Invoice No.',
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.grey700),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        transaction.referenceNo,
-                        style: pw.TextStyle(
-                            fontSize: 18, fontWeight: pw.FontWeight.bold),
-                      ),
-                      pw.SizedBox(height: 8),
-                      pw.Text(
-                        'Date: ${_dateFormat.format(invoice.invoiceDate)}',
-                        style: const pw.TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 30),
-
-              // Items table
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey400),
-                children: itemRows,
-              ),
-              pw.SizedBox(height: 20),
-
-              // Amounts
-              pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.grey200,
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(8)),
-                  border: pw.Border.all(color: PdfColors.grey400),
-                ),
-                child: pw.Column(
-                  children: [
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text('Sub Total',
-                            style: const pw.TextStyle(fontSize: 14)),
-                        pw.Text('Rs ${_currencyFormat.format(subTotal)}',
-                            style: const pw.TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                    pw.SizedBox(height: 12),
-                    pw.Divider(),
-                    pw.SizedBox(height: 8),
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text('Grand Total',
-                            style: pw.TextStyle(
-                                fontSize: 16,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.blue)),
-                        pw.Text(
-                            'Rs ${_currencyFormat.format(invoice.grandTotal)}',
-                            style: pw.TextStyle(
-                                fontSize: 16,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.blue)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Payment details
-              if (paymentLines != null && paymentLines.isNotEmpty) ...[
-                pw.SizedBox(height: 20),
-                pw.Text('Payment Details',
-                    style: pw.TextStyle(
-                        fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 10),
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(16),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.green50,
-                    borderRadius:
-                        const pw.BorderRadius.all(pw.Radius.circular(8)),
-                    border: pw.Border.all(color: PdfColors.grey400),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Cash Receipt',
-                          style: pw.TextStyle(
-                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 10),
-                      ...paymentLines.map((payment) {
-                        final accountName =
-                            payment['accountName'] as String? ?? 'Unknown';
-                        final amount = payment['amount'] as double? ?? 0;
-                        return pw.Padding(
-                          padding: const pw.EdgeInsets.only(bottom: 6),
-                          child: pw.Row(
-                            mainAxisAlignment:
-                                pw.MainAxisAlignment.spaceBetween,
-                            children: [
-                              pw.Text(accountName),
-                              pw.Text('Rs ${_currencyFormat.format(amount)}'),
-                            ],
-                          ),
-                        );
-                      }),
-                      pw.Divider(),
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('Total Paid',
-                              style: pw.TextStyle(
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.green)),
-                          pw.Text(
-                            'Rs ${_currencyFormat.format(paymentLines.fold(0.0, (sum, p) => sum + (p['amount'] as double? ?? 0)))}',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.green),
-                          ),
-                        ],
-                      ),
-                      pw.SizedBox(height: 8),
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('Due Amount',
-                              style: pw.TextStyle(
-                                  fontWeight: pw.FontWeight.bold,
-                                  color: PdfColors.red)),
-                          pw.Text(
-                            'Rs ${_currencyFormat.format(invoice.grandTotal - paymentLines.fold(0.0, (sum, p) => sum + (p['amount'] as double? ?? 0)))}',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.red),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-
-    return pdf.save();
-  }
-
   // Share invoice with options
   static Future<void> shareInvoice({
     required BuildContext context,
@@ -685,6 +613,8 @@ class InvoiceGenerator {
     required Transaction transaction,
     required List<Map<String, dynamic>> lineItems,
     List<Map<String, dynamic>>? paymentLines,
+    double? customerBalance,
+    double? openingBalance,
   }) async {
     showModalBottomSheet(
       context: context,
@@ -708,18 +638,18 @@ class InvoiceGenerator {
                 onTap: () async {
                   Navigator.pop(context);
                   await _shareAsImage(company, party, invoice, transaction,
-                      lineItems, paymentLines);
+                      lineItems, paymentLines, customerBalance, openingBalance);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                title: const Text('Share as PDF'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _shareAsPdf(company, party, invoice, transaction,
-                      lineItems, paymentLines);
-                },
-              ),
+              // ListTile(
+              //   leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              //   title: const Text('Share as PDF'),
+              //   onTap: () async {
+              //     Navigator.pop(context);
+              //     await _shareAsPdf(company, party, invoice, transaction,
+              //         lineItems, paymentLines, customerBalance, openingBalance);
+              //   },
+              // ),
             ],
           ),
         );
@@ -734,6 +664,8 @@ class InvoiceGenerator {
     Transaction transaction,
     List<Map<String, dynamic>> lineItems,
     List<Map<String, dynamic>>? paymentLines,
+    double? customerBalance,
+    double? openingBalance,
   ) async {
     try {
       print('Starting image generation for invoice ${transaction.referenceNo}');
@@ -746,6 +678,8 @@ class InvoiceGenerator {
         transaction: transaction,
         lineItems: lineItems,
         paymentLines: paymentLines,
+        customerBalance: customerBalance,
+        openingBalance: openingBalance,
       );
 
       print('Image generated successfully, size: ${imageBytes.length} bytes');
@@ -771,7 +705,124 @@ class InvoiceGenerator {
     }
   }
 
-  static Future<void> _shareAsPdf(
+  static Future<void> _attachAsImage(
+    Company company,
+    Party party,
+    Invoice invoice,
+    Transaction transaction,
+    List<Map<String, dynamic>> lineItems,
+    List<Map<String, dynamic>>? paymentLines,
+  ) async {
+    // Show dialog to select attachment source
+    final BuildContext? context = _getCurrentContext();
+    if (context == null) {
+      print('Error: Unable to get context for dialog');
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Attach Invoice'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image, color: Colors.blue),
+                title: const Text('Generated Invoice Image'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _attachGeneratedImage(
+                    company,
+                    party,
+                    invoice,
+                    transaction,
+                    lineItems,
+                    paymentLines,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.purple),
+                title: const Text('Select from Gallery'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _attachFromGallery(transaction.referenceNo);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder, color: Colors.orange),
+                title: const Text('Select File'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _attachFromFilePicker(transaction.referenceNo);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static Future<void> _attachAsImageWithContext(
+    BuildContext context,
+    Company company,
+    Party party,
+    Invoice invoice,
+    Transaction transaction,
+    List<Map<String, dynamic>> lineItems,
+    List<Map<String, dynamic>>? paymentLines,
+  ) async {
+    // Show dialog to select attachment source
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Attach Invoice'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image, color: Colors.blue),
+                title: const Text('Generated Invoice Image'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _attachGeneratedImage(
+                    company,
+                    party,
+                    invoice,
+                    transaction,
+                    lineItems,
+                    paymentLines,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.purple),
+                title: const Text('Select from Gallery'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _attachFromGallery(transaction.referenceNo);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder, color: Colors.orange),
+                title: const Text('Select File'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _attachFromFilePicker(transaction.referenceNo);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static Future<void> _attachGeneratedImage(
     Company company,
     Party party,
     Invoice invoice,
@@ -780,7 +831,10 @@ class InvoiceGenerator {
     List<Map<String, dynamic>>? paymentLines,
   ) async {
     try {
-      final pdfBytes = await generateInvoicePdf(
+      print(
+          'Starting attachment generation for invoice ${transaction.referenceNo}');
+
+      final imageBytes = await generateInvoiceImage(
         company: company,
         party: party,
         invoice: invoice,
@@ -789,17 +843,114 @@ class InvoiceGenerator {
         paymentLines: paymentLines,
       );
 
-      final tempDir = await getTemporaryDirectory();
-      final file =
-          File('${tempDir.path}/invoice_${transaction.referenceNo}.pdf');
-      await file.writeAsBytes(pdfBytes);
+      print('Image generated successfully, size: ${imageBytes.length} bytes');
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Sales Invoice - ${transaction.referenceNo}',
-      );
+      // Save to documents directory for attachment
+      final directory = await getApplicationDocumentsDirectory();
+      final invoicesDir = Directory('${directory.path}/invoices');
+
+      // Create invoices directory if it doesn't exist
+      if (!await invoicesDir.exists()) {
+        await invoicesDir.create(recursive: true);
+      }
+
+      final fileName = 'invoice_${transaction.referenceNo}.png';
+      final file = File('${invoicesDir.path}/$fileName');
+      await file.writeAsBytes(imageBytes);
+
+      print('Image saved to: ${file.path}');
+      print('Invoice image attached successfully at: ${file.path}');
     } catch (e) {
-      // Handle error
+      print('Error attaching generated image: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> _attachFromGallery(String referenceNo) async {
+    try {
+      print('Opening image picker for gallery');
+      final ImagePicker picker = ImagePicker();
+
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) {
+        print('No image selected from gallery');
+        return;
+      }
+
+      final directory = await getApplicationDocumentsDirectory();
+      final invoicesDir = Directory('${directory.path}/invoices');
+
+      if (!await invoicesDir.exists()) {
+        await invoicesDir.create(recursive: true);
+      }
+
+      // Get file extension
+      final fileName =
+          'invoice_${referenceNo}_gallery_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final destinationPath = '${invoicesDir.path}/$fileName';
+
+      // Copy file to invoices directory
+      final File pickedFileObj = File(pickedFile.path);
+      await pickedFileObj.copy(destinationPath);
+
+      print('Image attached from gallery to: $destinationPath');
+    } catch (e) {
+      print('Error attaching image from gallery: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> _attachFromFilePicker(String referenceNo) async {
+    try {
+      print('Opening file picker');
+
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'png'],
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        print('No file selected');
+        return;
+      }
+
+      final PlatformFile pickedFile = result.files.first;
+      final File sourceFile = File(pickedFile.path!);
+
+      final directory = await getApplicationDocumentsDirectory();
+      final invoicesDir = Directory('${directory.path}/invoices');
+
+      if (!await invoicesDir.exists()) {
+        await invoicesDir.create(recursive: true);
+      }
+
+      // Copy file to invoices directory
+      final fileName =
+          'invoice_${referenceNo}_file_${DateTime.now().millisecondsSinceEpoch}.${pickedFile.extension}';
+      final destinationPath = '${invoicesDir.path}/$fileName';
+
+      await sourceFile.copy(destinationPath);
+
+      print('File attached to: $destinationPath');
+    } catch (e) {
+      print('Error attaching file: $e');
+      rethrow;
+    }
+  }
+
+  static BuildContext? _getCurrentContext() {
+    // This is a workaround to get context in a static method
+    // In production, consider using a different approach like passing context as parameter
+    try {
+      final key = GlobalKey<NavigatorState>();
+      return key.currentContext;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -825,4 +976,64 @@ class InvoiceGenerator {
       print('Error drawing text "$text" at $position: $e');
     }
   }
+
+  static void _drawRightAlignedText(
+      Canvas canvas, String text, Offset position, TextStyle style) {
+    try {
+      final textSpan = TextSpan(text: text, style: style);
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: ui.TextDirection.ltr,
+        textAlign: TextAlign.right,
+      );
+
+      textPainter.layout();
+
+      // Calculate right-aligned position
+      final rightAlignedPosition = Offset(
+        position.dx - textPainter.width,
+        position.dy,
+      );
+
+      // Add bounds checking
+      if (rightAlignedPosition.dx >= 0 && rightAlignedPosition.dy >= 0) {
+        textPainter.paint(canvas, rightAlignedPosition);
+      } else {
+        print(
+            'Warning: Invalid right-aligned text position $rightAlignedPosition for text: $text');
+      }
+    } catch (e) {
+      print('Error drawing right-aligned text "$text" at $position: $e');
+    }
+  }
+
+  // Direct share as image method
+  static Future<void> shareAsImage({
+    required Company company,
+    required Party party,
+    required Invoice invoice,
+    required Transaction transaction,
+    required List<Map<String, dynamic>> lineItems,
+    List<Map<String, dynamic>>? paymentLines,
+    double? customerBalance,
+    double? openingBalance,
+  }) async {
+    await _shareAsImage(company, party, invoice, transaction, lineItems,
+        paymentLines, customerBalance, openingBalance);
+  }
+
+  // // Direct share as PDF method
+  // static Future<void> shareAsPdf({
+  //   required Company company,
+  //   required Party party,
+  //   required Invoice invoice,
+  //   required Transaction transaction,
+  //   required List<Map<String, dynamic>> lineItems,
+  //   List<Map<String, dynamic>>? paymentLines,
+  //   double? customerBalance,
+  //   double? openingBalance,
+  // }) async {
+  //   await _shareAsPdf(company, party, invoice, transaction, lineItems,
+  //       paymentLines, customerBalance, openingBalance);
+  // }
 }

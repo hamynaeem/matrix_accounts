@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,14 +20,10 @@ class PartyFormScreen extends ConsumerStatefulWidget {
 class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _openingCtrl = TextEditingController();
-  final _creditLimitCtrl = TextEditingController();
-  final _paymentTermsCtrl = TextEditingController();
 
   PartyType _partyType = PartyType.customer;
-  CustomerClass _customerClass = CustomerClass.retailer;
   bool _isActive = true;
 
   @override
@@ -35,13 +33,9 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
     if (p != null) {
       _nameCtrl.text = p.name;
       _phoneCtrl.text = p.phone ?? '';
-      _emailCtrl.text = p.email ?? '';
       _addressCtrl.text = p.address ?? '';
       _openingCtrl.text = p.openingBalance.toString();
-      _creditLimitCtrl.text = p.creditLimit.toString();
-      _paymentTermsCtrl.text = p.paymentTermsDays.toString();
       _partyType = p.partyType;
-      _customerClass = p.customerClass;
       _isActive = p.isActive;
     }
   }
@@ -50,11 +44,8 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _emailCtrl.dispose();
     _addressCtrl.dispose();
     _openingCtrl.dispose();
-    _creditLimitCtrl.dispose();
-    _paymentTermsCtrl.dispose();
     super.dispose();
   }
 
@@ -66,6 +57,7 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.blueAccent,
         title: Text(isEditing ? 'Edit Party' : 'Add New Party'),
         elevation: 0,
         leading: IconButton(
@@ -108,11 +100,6 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
                   Expanded(
                     child: _buildTypeSelector(),
                   ),
-                  const SizedBox(width: 12),
-                  if (_partyType != PartyType.supplier)
-                    Expanded(
-                      child: _buildCustomerClassSelector(),
-                    ),
                 ],
               ),
               const SizedBox(height: 24),
@@ -129,14 +116,6 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
               ),
               const SizedBox(height: 16),
               _buildTextField(
-                controller: _emailCtrl,
-                label: 'Email',
-                hint: 'Enter email address',
-                icon: Icons.email,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
                 controller: _addressCtrl,
                 label: 'Address',
                 hint: 'Enter address',
@@ -148,35 +127,11 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
               // Financial Information Section
               _buildSectionHeader('Financial Information'),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _openingCtrl,
-                      label: 'Opening Balance',
-                      hint: '0.00',
-                      icon: Icons.account_balance,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _creditLimitCtrl,
-                      label: 'Credit Limit',
-                      hint: '0.00',
-                      icon: Icons.credit_card,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               _buildTextField(
-                controller: _paymentTermsCtrl,
-                label: 'Payment Terms (Days)',
-                hint: '0',
-                icon: Icons.calendar_today,
+                controller: _openingCtrl,
+                label: 'Opening Balance',
+                hint: '0.00',
+                icon: Icons.account_balance,
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 24),
@@ -209,28 +164,56 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
                       return;
                     }
 
-                    final party = widget.party ?? Party();
+                    // Validate numeric fields
+                    final openingBalance =
+                        double.tryParse(_openingCtrl.text) ?? 0.0;
 
-                    party.companyId = company.id;
-                    party.name = _nameCtrl.text.trim();
-                    party.phone = _phoneCtrl.text.trim();
-                    party.email = _emailCtrl.text.trim();
-                    party.address = _addressCtrl.text.trim();
-                    party.openingBalance =
-                        double.tryParse(_openingCtrl.text) ?? 0;
-                    party.creditLimit =
-                        double.tryParse(_creditLimitCtrl.text) ?? 0;
-                    party.paymentTermsDays =
-                        int.tryParse(_paymentTermsCtrl.text) ?? 0;
-                    party.partyType = _partyType;
-                    if (_partyType != PartyType.supplier) {
-                      party.customerClass = _customerClass;
+                    try {
+                      final party = widget.party ?? Party();
+                      final isEditing = widget.party != null;
+                      final oldOpeningBalance =
+                          isEditing ? party.openingBalance : 0.0;
+
+                      party.companyId = company.id;
+                      party.name = _nameCtrl.text.trim();
+                      party.phone = _phoneCtrl.text.trim();
+                      party.address = _addressCtrl.text.trim();
+                      party.openingBalance = openingBalance;
+                      party.partyType = _partyType;
+                      party.isActive = _isActive;
+
+                      // Save the party first
+                      await dao.saveParty(party);
+
+                      // If opening balance changed, update the accounting records
+                      if (oldOpeningBalance != openingBalance) {
+                        await dao.updatePartyOpeningBalance(
+                          partyId: party.id,
+                          companyId: company.id,
+                          openingBalance: openingBalance,
+                        );
+                      }
+
+                      ref.invalidate(partyListProvider);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isEditing
+                              ? 'Party updated successfully'
+                              : 'Party added successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+
+                      Navigator.pop(context, party);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error saving party: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
                     }
-                    party.isActive = _isActive;
-
-                    await dao.saveParty(party);
-                    ref.invalidate(partyListProvider);
-                    Navigator.pop(context);
                   },
                   child: Text(
                     isEditing ? 'Update Party' : 'Add Party',
@@ -347,37 +330,6 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
           onChanged: (v) {
             if (v != null) {
               setState(() => _partyType = v);
-            }
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomerClassSelector() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(10),
-        color: Colors.grey.shade50,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<CustomerClass>(
-          value: _customerClass,
-          isExpanded: true,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          items: CustomerClass.values
-              .map((e) => DropdownMenuItem(
-                    value: e,
-                    child: Text(
-                      e.name[0].toUpperCase() + e.name.substring(1),
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ))
-              .toList(),
-          onChanged: (v) {
-            if (v != null) {
-              setState(() => _customerClass = v);
             }
           },
         ),

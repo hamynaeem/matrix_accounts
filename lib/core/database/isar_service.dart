@@ -10,6 +10,7 @@ import '../../data/models/party_model.dart';
 import '../../data/models/payment_models.dart';
 import '../../data/models/transaction_model.dart';
 import '../../data/models/user_model.dart';
+import '../../data/models/sync_change_model.dart';
 
 class IsarService {
   Isar? _isar;
@@ -44,6 +45,7 @@ class IsarService {
         PaymentOutLineSchema,
         AccountSchema,
         AccountTransactionSchema,
+        SyncChangeSchema,
       ],
       directory: dir.path,
       inspector: kDebugMode,

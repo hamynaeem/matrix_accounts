@@ -51,6 +51,26 @@ class PurchaseDao {
     await isar.writeTxn(() async {
       final txnId = await isar.transactions.put(transaction);
 
+      // Calculate previous balance for this supplier
+      final previousInvoices = await isar.invoices
+          .filter()
+          .companyIdEqualTo(companyId)
+          .partyIdEqualTo(supplier.id)
+          .invoiceTypeEqualTo(InvoiceType.purchase)
+          .invoiceDateLessThan(date)
+          .findAll();
+
+      double previousBalance = 0;
+      for (final prevInvoice in previousInvoices) {
+        previousBalance += prevInvoice.remainingBalance;
+      }
+
+      // Calculate total paid amount from payment lines
+      double totalPaid = 0;
+      if (paymentLines != null) {
+        totalPaid = paymentLines.fold(0.0, (sum, p) => sum + p.amount);
+      }
+
       final invoice = Invoice()
         ..companyId = companyId
         ..transactionId = txnId
@@ -58,6 +78,11 @@ class PurchaseDao {
         ..partyId = supplier.id
         ..invoiceDate = date
         ..grandTotal = transaction.totalAmount
+        ..invoiceNumber = referenceNo
+        ..previousBalance = previousBalance
+        ..paidAmount = totalPaid
+        ..remainingBalance =
+            previousBalance + transaction.totalAmount - totalPaid
         ..status = 'Pending';
 
       final invoiceId = await isar.invoices.put(invoice);
@@ -113,8 +138,6 @@ class PurchaseDao {
           String accountCode;
           if (paymentAccount.accountType == PaymentAccountType.cash) {
             accountCode = '1000';
-          } else if (paymentAccount.accountType == PaymentAccountType.cheque) {
-            accountCode = '1050';
           } else {
             accountCode = '1100'; // bank
           }
@@ -250,8 +273,6 @@ class PurchaseDao {
           String accountCode;
           if (paymentAccount.accountType == PaymentAccountType.cash) {
             accountCode = '1000';
-          } else if (paymentAccount.accountType == PaymentAccountType.cheque) {
-            accountCode = '1050';
           } else {
             accountCode = '1100'; // bank
           }

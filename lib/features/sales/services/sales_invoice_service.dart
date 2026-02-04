@@ -96,6 +96,17 @@ class SalesInvoiceService {
         .findAll();
   }
 
+  /// Get all sale returns for a company
+  Future<List<Invoice>> getSaleReturns(int companyId) async {
+    return await _isar.invoices
+        .filter()
+        .companyIdEqualTo(companyId)
+        .invoiceTypeEqualTo(InvoiceType.sale)
+        .statusEqualTo('Return', caseSensitive: false)
+        .sortByInvoiceDateDesc()
+        .findAll();
+  }
+
   /// Delete sale return
   Future<bool> deleteSaleReturn(int returnId) async {
     // Use the same delete method - it's just an invoice

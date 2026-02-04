@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
@@ -19,6 +21,9 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
   String _searchQuery = '';
   bool _showOnlyTracked = true;
   bool _showOnlyInStock = false;
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  bool _dateFilterEnabled = false;
 
   @override
   Widget build(BuildContext context) {
@@ -27,8 +32,26 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stock Report'),
-        backgroundColor: Colors.green.shade700,
+        backgroundColor: Colors.blueAccent,
         actions: [
+          IconButton(
+            icon: Icon(_dateFilterEnabled
+                ? Icons.date_range
+                : Icons.date_range_outlined),
+            tooltip:
+                _dateFilterEnabled ? 'Clear Date Filter' : 'Filter by Date',
+            onPressed: () {
+              if (_dateFilterEnabled) {
+                setState(() {
+                  _dateFilterEnabled = false;
+                  _fromDate = null;
+                  _toDate = null;
+                });
+              } else {
+                _showDateFilterDialog();
+              }
+            },
+          ),
           IconButton(
             icon: Icon(_showOnlyTracked
                 ? Icons.inventory
@@ -82,6 +105,9 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
             ),
           ),
 
+          // Date filter display
+          if (_dateFilterEnabled) _buildDateFilterDisplay(),
+
           // Stock list
           Expanded(
             child: _buildStockList(currentCompany?.id),
@@ -99,7 +125,7 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
     final isar = ref.read(isarServiceProvider).isar;
 
     return FutureBuilder<List<_StockItem>>(
-      future: _calculateStock(isar, companyId),
+      future: _calculateStock(isar, companyId, _fromDate, _toDate),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -249,13 +275,6 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        'SKU: ${item.sku}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -275,6 +294,23 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
                       fontSize: 14,
                     ),
                   ),
+                ),
+              ],
+            ),
+            const Divider(height: 16),
+            // Purchase and Sale quantities row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildDetailColumn(
+                  'Total Purchased',
+                  '${item.totalPurchaseQty.toStringAsFixed(2)} units',
+                  color: Colors.green.shade700,
+                ),
+                _buildDetailColumn(
+                  'Total Sold',
+                  '${item.totalSaleQty.toStringAsFixed(2)} units',
+                  color: Colors.red.shade700,
                 ),
               ],
             ),
@@ -325,20 +361,29 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
     );
   }
 
-  Future<List<_StockItem>> _calculateStock(Isar isar, int companyId) async {
+  Future<List<_StockItem>> _calculateStock(
+      Isar isar, int companyId, DateTime? fromDate, DateTime? toDate) async {
     final products =
         await isar.products.filter().companyIdEqualTo(companyId).findAll();
 
     final stockItems = <_StockItem>[];
 
     for (final product in products) {
-      // Get all stock movements for this product
-      final stockMovements = await isar.stockLedgers
+      // Get stock movements for this product with date filtering
+      var query = isar.stockLedgers
           .filter()
           .companyIdEqualTo(companyId)
-          .productIdEqualTo(product.id)
-          .sortByDate()
-          .findAll();
+          .productIdEqualTo(product.id);
+
+      if (fromDate != null) {
+        query =
+            query.dateGreaterThan(fromDate.subtract(const Duration(days: 1)));
+      }
+      if (toDate != null) {
+        query = query.dateLessThan(toDate.add(const Duration(days: 1)));
+      }
+
+      final stockMovements = await query.sortByDate().findAll();
 
       // Calculate current stock
       double currentStock = product.openingQty;
@@ -350,13 +395,23 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
       double avgCost = product.lastCost;
       double totalCostValue = 0;
       double totalPurchaseQty = 0;
+      double totalSaleQty = 0;
 
       // Get all purchase movements for this product
       final purchaseMovements = stockMovements
           .where((m) => m.movementType == StockMovementType.inPurchase)
           .toList();
 
+      // Get all sale movements for this product
+      final saleMovements = stockMovements
+          .where((m) => m.movementType == StockMovementType.outSale)
+          .toList();
+
+      // Calculate total purchase quantity
       for (final movement in purchaseMovements) {
+        totalPurchaseQty +=
+            movement.quantityDelta.abs(); // Use abs to ensure positive value
+
         // Get the transaction line to get the actual purchase price
         if (movement.transactionId != null) {
           final transactionLines = await isar
@@ -368,10 +423,15 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
 
           if (transactionLines.isNotEmpty) {
             final line = transactionLines.first;
-            totalCostValue += line.unitPrice * movement.quantityDelta;
-            totalPurchaseQty += movement.quantityDelta;
+            totalCostValue += line.unitPrice * movement.quantityDelta.abs();
           }
         }
+      }
+
+      // Calculate total sale quantity
+      for (final movement in saleMovements) {
+        totalSaleQty +=
+            movement.quantityDelta.abs(); // Use abs to ensure positive value
       }
 
       // Calculate weighted average if we have purchase data
@@ -390,6 +450,8 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
         currentStock: currentStock,
         avgCost: avgCost,
         salePrice: product.salePrice,
+        totalPurchaseQty: totalPurchaseQty,
+        totalSaleQty: totalSaleQty,
       ));
     }
 
@@ -402,6 +464,130 @@ class _StockReportScreenState extends ConsumerState<StockReportScreen> {
 
     return stockItems;
   }
+
+  void _showDateFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        DateTime? tempFromDate = _fromDate;
+        DateTime? tempToDate = _toDate;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Filter by Date Range'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    title: Text(
+                      tempFromDate == null
+                          ? 'From Date: Not selected'
+                          : 'From Date: ${tempFromDate!.day}/${tempFromDate!.month}/${tempFromDate!.year}',
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: tempFromDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        setDialogState(() {
+                          tempFromDate = date;
+                        });
+                      }
+                    },
+                  ),
+                  ListTile(
+                    title: Text(
+                      tempToDate == null
+                          ? 'To Date: Not selected'
+                          : 'To Date: ${tempToDate!.day}/${tempToDate!.month}/${tempToDate!.year}',
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: tempToDate ?? DateTime.now(),
+                        firstDate: tempFromDate ?? DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        setDialogState(() {
+                          tempToDate = date;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _fromDate = tempFromDate;
+                      _toDate = tempToDate;
+                      _dateFilterEnabled =
+                          tempFromDate != null || tempToDate != null;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDateFilterDisplay() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.date_range, color: Colors.blue, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Date Filter: ${_fromDate != null ? '${_fromDate!.day}/${_fromDate!.month}/${_fromDate!.year}' : 'All'} - ${_toDate != null ? '${_toDate!.day}/${_toDate!.month}/${_toDate!.year}' : 'All'}',
+              style: const TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.blue, size: 20),
+            onPressed: () {
+              setState(() {
+                _dateFilterEnabled = false;
+                _fromDate = null;
+                _toDate = null;
+              });
+            },
+            constraints: const BoxConstraints(),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StockItem {
@@ -412,6 +598,8 @@ class _StockItem {
   final double currentStock;
   final double avgCost;
   final double salePrice;
+  final double totalPurchaseQty;
+  final double totalSaleQty;
 
   _StockItem({
     required this.productId,
@@ -421,5 +609,7 @@ class _StockItem {
     required this.currentStock,
     required this.avgCost,
     required this.salePrice,
+    required this.totalPurchaseQty,
+    required this.totalSaleQty,
   });
 }

@@ -38,6 +38,9 @@ class Transaction {
 
   int? createdByUserId;
   DateTime createdAt = DateTime.now();
+
+  @ignore
+  get notes => null;
 }
 
 @collection

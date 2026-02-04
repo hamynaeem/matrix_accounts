@@ -1,4 +1,24 @@
 import 'package:go_router/go_router.dart';
+import 'package:matrix_accounts/features/cash_in_hand.dart';
+import 'package:matrix_accounts/features/parties/presentation/party_form_screen.dart';
+import 'package:matrix_accounts/features/plans.dart';
+import 'package:matrix_accounts/features/profit_loss.dart';
+import 'package:matrix_accounts/features/purchases/presentation/purchase_return_list_screen.dart'
+    show PurchaseReturnListScreen;
+import 'package:matrix_accounts/features/purchases/presentation/purchase_return_form_screen.dart';
+import 'package:matrix_accounts/features/purchases/purchase_report.dart';
+import 'package:matrix_accounts/features/reports/presentation/account_ledger_screen.dart';
+
+import 'package:matrix_accounts/features/sales/presentation/sale_return_list_screen.dart';
+import 'package:matrix_accounts/features/sales/presentation/sale_return_form_screen.dart';
+import 'package:matrix_accounts/features/settings/presentation/company_settings_screen.dart';
+import 'package:matrix_accounts/settings/about_settings_screen.dart';
+import 'package:matrix_accounts/settings/financial_year_settings_screen.dart';
+import 'package:matrix_accounts/settings/lock_screen.dart';
+import 'package:matrix_accounts/settings/setting.dart';
+import 'package:matrix_accounts/settings/tax_settings_screen.dart'
+    show TaxSettingsScreen;
+import 'package:matrix_accounts/settings/theme_settings_screen.dart';
 
 import '../../features/companies/presentation/company_form_screen.dart';
 import '../../features/companies/presentation/company_list_screen.dart';
@@ -20,9 +40,12 @@ import '../../features/reports/presentation/stock_report_screen.dart';
 import '../../features/reports/presentation/trial_balance_screen.dart';
 import '../../features/sales/presentation/sale_invoice_list_screen.dart';
 import '../../features/sales/presentation/sales_invoice_form_screen.dart';
+import '../../presentation/screens/about_screen.dart';
 import '../../presentation/screens/company_selector_screen.dart';
 import '../../presentation/screens/dashboard_screen.dart';
+import '../../presentation/screens/help_screen.dart';
 import '../../presentation/screens/login_screen.dart';
+import '../../presentation/screens/profile_screen.dart';
 import '../../presentation/screens/splash_screen.dart';
 
 GoRouter buildRouter() {
@@ -42,8 +65,16 @@ GoRouter buildRouter() {
         builder: (context, state) => const CompanySelectorScreen(),
       ),
       GoRoute(
+        path: '/lock',
+        builder: (context, state) => const LockScreen(),
+      ),
+      GoRoute(
         path: '/dashboard',
         builder: (context, state) => const DashboardScreen(),
+      ),
+      GoRoute(
+        path: '/plans',
+        builder: (context, state) => const PlansScreen(),
       ),
       GoRoute(
         path: '/sales',
@@ -68,6 +99,10 @@ GoRouter buildRouter() {
           final invoiceId = idParam != null ? int.tryParse(idParam) : null;
           return PurchaseInvoiceFormScreen(invoiceId: invoiceId);
         },
+      ),
+      GoRoute(
+        path: '/purchases/return/form',
+        builder: (context, state) => const PurchaseReturnFormScreen(),
       ),
       GoRoute(
         path: '/expenses',
@@ -148,6 +183,87 @@ GoRouter buildRouter() {
       GoRoute(
         path: '/reports/trial-balance',
         builder: (context, state) => const TrialBalanceScreen(),
+      ),
+      GoRoute(
+          path: '/accounts/ledger',
+          builder: (context, state) => const AccountLedgerScreen()),
+      GoRoute(
+          path: '/parties/stateentry',
+          builder: (context, state) => const PartyFormScreen()),
+      GoRoute(
+        path: '/cash-in-hand',
+        builder: (context, state) => const CashInHandScreen(),
+      ),
+      GoRoute(
+        path: '/about',
+        builder: (context, state) => const AboutScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const Settings_Screen(),
+      ),
+      GoRoute(
+        path: '/reports/purchases',
+        builder: (context, state) => const PurchaseReportScreen(),
+      ),
+      GoRoute(
+          path: '/profit/loss',
+          builder: (context, state) {
+            return const ProfitLossScreen();
+          }),
+      GoRoute(
+          path: '/purchase/return',
+          builder: (context, state) {
+            return const PurchaseReturnListScreen();
+          }),
+      GoRoute(
+        path: '/sale/return',
+        builder: (context, state) => const SaleReturnListScreen(),
+      ),
+      GoRoute(
+        path: '/sales/return/form',
+        builder: (context, state) {
+          final idParam = state.uri.queryParameters['id'];
+          final returnId = idParam != null ? int.tryParse(idParam) : null;
+          return SaleReturnFormScreen(returnId: returnId);
+        },
+      ),
+
+      // Main Settings Screen
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const Settings_Screen(),
+      ),
+
+      // Settings Sub-screens
+      GoRoute(
+        path: '/settings/company-settings',
+        builder: (context, state) => const CompanySettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/financial-year',
+        builder: (context, state) => const FinancialYearSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/tax-settings',
+        builder: (context, state) => const TaxSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/theme-settings',
+        builder: (context, state) => const ThemeSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/about-settings',
+        builder: (context, state) => const AboutSettingsScreen(),
+      ),
+
+      GoRoute(
+        path: '/help',
+        builder: (context, state) => const HelpScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfileScreen(),
       ),
     ],
   );

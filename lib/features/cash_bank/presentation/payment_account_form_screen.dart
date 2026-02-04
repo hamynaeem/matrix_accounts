@@ -115,11 +115,11 @@ class _PaymentAccountFormScreenState
               Icons.account_balance,
             ),
             const SizedBox(width: 12),
-            _buildTypeChip(
-              'Cheque',
-              PaymentAccountType.cheque,
-              Icons.receipt_long,
-            ),
+            // _buildTypeChip(
+            //   'Cheque',
+            //   PaymentAccountType.cheque,
+            //   Icons.receipt_long,
+            // ),
           ],
         ),
       ],
@@ -199,9 +199,7 @@ class _PaymentAccountFormScreenState
       case PaymentAccountType.bank:
         icons = bankIcons;
         break;
-      case PaymentAccountType.cheque:
-        icons = chequeIcons;
-        break;
+    
     }
 
     return Column(

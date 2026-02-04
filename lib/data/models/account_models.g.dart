@@ -48,28 +48,33 @@ const AccountSchema = CollectionSchema(
       name: r'description',
       type: IsarType.string,
     ),
-    r'isActive': PropertySchema(
+    r'hashCode': PropertySchema(
       id: 6,
+      name: r'hashCode',
+      type: IsarType.long,
+    ),
+    r'isActive': PropertySchema(
+      id: 7,
       name: r'isActive',
       type: IsarType.bool,
     ),
     r'isSystem': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'isSystem',
       type: IsarType.bool,
     ),
     r'name': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'name',
       type: IsarType.string,
     ),
     r'openingBalance': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'openingBalance',
       type: IsarType.double,
     ),
     r'parentAccountId': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'parentAccountId',
       type: IsarType.long,
     )
@@ -144,11 +149,12 @@ void _accountSerialize(
   writer.writeDateTime(offsets[3], object.createdAt);
   writer.writeDouble(offsets[4], object.currentBalance);
   writer.writeString(offsets[5], object.description);
-  writer.writeBool(offsets[6], object.isActive);
-  writer.writeBool(offsets[7], object.isSystem);
-  writer.writeString(offsets[8], object.name);
-  writer.writeDouble(offsets[9], object.openingBalance);
-  writer.writeLong(offsets[10], object.parentAccountId);
+  writer.writeLong(offsets[6], object.hashCode);
+  writer.writeBool(offsets[7], object.isActive);
+  writer.writeBool(offsets[8], object.isSystem);
+  writer.writeString(offsets[9], object.name);
+  writer.writeDouble(offsets[10], object.openingBalance);
+  writer.writeLong(offsets[11], object.parentAccountId);
 }
 
 Account _accountDeserialize(
@@ -167,11 +173,11 @@ Account _accountDeserialize(
   object.currentBalance = reader.readDouble(offsets[4]);
   object.description = reader.readStringOrNull(offsets[5]);
   object.id = id;
-  object.isActive = reader.readBool(offsets[6]);
-  object.isSystem = reader.readBool(offsets[7]);
-  object.name = reader.readString(offsets[8]);
-  object.openingBalance = reader.readDouble(offsets[9]);
-  object.parentAccountId = reader.readLongOrNull(offsets[10]);
+  object.isActive = reader.readBool(offsets[7]);
+  object.isSystem = reader.readBool(offsets[8]);
+  object.name = reader.readString(offsets[9]);
+  object.openingBalance = reader.readDouble(offsets[10]);
+  object.parentAccountId = reader.readLongOrNull(offsets[11]);
   return object;
 }
 
@@ -196,14 +202,16 @@ P _accountDeserializeProp<P>(
     case 5:
       return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readBool(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 7:
       return (reader.readBool(offset)) as P;
     case 8:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 9:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 10:
+      return (reader.readDouble(offset)) as P;
+    case 11:
       return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -955,6 +963,59 @@ extension AccountQueryFilter
     });
   }
 
+  QueryBuilder<Account, Account, QAfterFilterCondition> hashCodeEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'hashCode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Account, Account, QAfterFilterCondition> hashCodeGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'hashCode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Account, Account, QAfterFilterCondition> hashCodeLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'hashCode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Account, Account, QAfterFilterCondition> hashCodeBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'hashCode',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Account, Account, QAfterFilterCondition> idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1372,6 +1433,18 @@ extension AccountQuerySortBy on QueryBuilder<Account, Account, QSortBy> {
     });
   }
 
+  QueryBuilder<Account, Account, QAfterSortBy> sortByHashCode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Account, Account, QAfterSortBy> sortByHashCodeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.desc);
+    });
+  }
+
   QueryBuilder<Account, Account, QAfterSortBy> sortByIsActive() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isActive', Sort.asc);
@@ -1507,6 +1580,18 @@ extension AccountQuerySortThenBy
     });
   }
 
+  QueryBuilder<Account, Account, QAfterSortBy> thenByHashCode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Account, Account, QAfterSortBy> thenByHashCodeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.desc);
+    });
+  }
+
   QueryBuilder<Account, Account, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -1620,6 +1705,12 @@ extension AccountQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Account, Account, QDistinct> distinctByHashCode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'hashCode');
+    });
+  }
+
   QueryBuilder<Account, Account, QDistinct> distinctByIsActive() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'isActive');
@@ -1696,6 +1787,12 @@ extension AccountQueryProperty
     });
   }
 
+  QueryBuilder<Account, int, QQueryOperations> hashCodeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'hashCode');
+    });
+  }
+
   QueryBuilder<Account, bool, QQueryOperations> isActiveProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isActive');
@@ -1769,33 +1866,38 @@ const AccountTransactionSchema = CollectionSchema(
       name: r'description',
       type: IsarType.string,
     ),
-    r'partyId': PropertySchema(
+    r'hashCode': PropertySchema(
       id: 6,
+      name: r'hashCode',
+      type: IsarType.long,
+    ),
+    r'partyId': PropertySchema(
+      id: 7,
       name: r'partyId',
       type: IsarType.long,
     ),
     r'referenceId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'referenceId',
       type: IsarType.long,
     ),
     r'referenceNo': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'referenceNo',
       type: IsarType.string,
     ),
     r'runningBalance': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'runningBalance',
       type: IsarType.double,
     ),
     r'transactionDate': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'transactionDate',
       type: IsarType.dateTime,
     ),
     r'transactionType': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'transactionType',
       type: IsarType.byte,
       enumMap: _AccountTransactiontransactionTypeEnumValueMap,
@@ -1914,12 +2016,13 @@ void _accountTransactionSerialize(
   writer.writeDouble(offsets[3], object.credit);
   writer.writeDouble(offsets[4], object.debit);
   writer.writeString(offsets[5], object.description);
-  writer.writeLong(offsets[6], object.partyId);
-  writer.writeLong(offsets[7], object.referenceId);
-  writer.writeString(offsets[8], object.referenceNo);
-  writer.writeDouble(offsets[9], object.runningBalance);
-  writer.writeDateTime(offsets[10], object.transactionDate);
-  writer.writeByte(offsets[11], object.transactionType.index);
+  writer.writeLong(offsets[6], object.hashCode);
+  writer.writeLong(offsets[7], object.partyId);
+  writer.writeLong(offsets[8], object.referenceId);
+  writer.writeString(offsets[9], object.referenceNo);
+  writer.writeDouble(offsets[10], object.runningBalance);
+  writer.writeDateTime(offsets[11], object.transactionDate);
+  writer.writeByte(offsets[12], object.transactionType.index);
 }
 
 AccountTransaction _accountTransactionDeserialize(
@@ -1936,13 +2039,13 @@ AccountTransaction _accountTransactionDeserialize(
   object.debit = reader.readDouble(offsets[4]);
   object.description = reader.readStringOrNull(offsets[5]);
   object.id = id;
-  object.partyId = reader.readLongOrNull(offsets[6]);
-  object.referenceId = reader.readLong(offsets[7]);
-  object.referenceNo = reader.readStringOrNull(offsets[8]);
-  object.runningBalance = reader.readDouble(offsets[9]);
-  object.transactionDate = reader.readDateTime(offsets[10]);
+  object.partyId = reader.readLongOrNull(offsets[7]);
+  object.referenceId = reader.readLong(offsets[8]);
+  object.referenceNo = reader.readStringOrNull(offsets[9]);
+  object.runningBalance = reader.readDouble(offsets[10]);
+  object.transactionDate = reader.readDateTime(offsets[11]);
   object.transactionType = _AccountTransactiontransactionTypeValueEnumMap[
-          reader.readByteOrNull(offsets[11])] ??
+          reader.readByteOrNull(offsets[12])] ??
       TransactionType.saleInvoice;
   return object;
 }
@@ -1967,16 +2070,18 @@ P _accountTransactionDeserializeProp<P>(
     case 5:
       return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readLongOrNull(offset)) as P;
-    case 7:
       return (reader.readLong(offset)) as P;
+    case 7:
+      return (reader.readLongOrNull(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 9:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 11:
+      return (reader.readDateTime(offset)) as P;
+    case 12:
       return (_AccountTransactiontransactionTypeValueEnumMap[
               reader.readByteOrNull(offset)] ??
           TransactionType.saleInvoice) as P;
@@ -1993,6 +2098,7 @@ const _AccountTransactiontransactionTypeEnumValueMap = {
   'journalEntry': 4,
   'saleReturn': 5,
   'purchaseReturn': 6,
+  'expense': 7,
 };
 const _AccountTransactiontransactionTypeValueEnumMap = {
   0: TransactionType.saleInvoice,
@@ -2002,6 +2108,7 @@ const _AccountTransactiontransactionTypeValueEnumMap = {
   4: TransactionType.journalEntry,
   5: TransactionType.saleReturn,
   6: TransactionType.purchaseReturn,
+  7: TransactionType.expense,
 };
 
 Id _accountTransactionGetId(AccountTransaction object) {
@@ -3065,6 +3172,62 @@ extension AccountTransactionQueryFilter
   }
 
   QueryBuilder<AccountTransaction, AccountTransaction, QAfterFilterCondition>
+      hashCodeEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'hashCode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterFilterCondition>
+      hashCodeGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'hashCode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterFilterCondition>
+      hashCodeLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'hashCode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterFilterCondition>
+      hashCodeBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'hashCode',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterFilterCondition>
       idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -3676,6 +3839,20 @@ extension AccountTransactionQuerySortBy
   }
 
   QueryBuilder<AccountTransaction, AccountTransaction, QAfterSortBy>
+      sortByHashCode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterSortBy>
+      sortByHashCodeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterSortBy>
       sortByPartyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'partyId', Sort.asc);
@@ -3847,6 +4024,20 @@ extension AccountTransactionQuerySortThenBy
   }
 
   QueryBuilder<AccountTransaction, AccountTransaction, QAfterSortBy>
+      thenByHashCode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterSortBy>
+      thenByHashCodeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'hashCode', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QAfterSortBy>
       thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -3990,6 +4181,13 @@ extension AccountTransactionQueryWhereDistinct
   }
 
   QueryBuilder<AccountTransaction, AccountTransaction, QDistinct>
+      distinctByHashCode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'hashCode');
+    });
+  }
+
+  QueryBuilder<AccountTransaction, AccountTransaction, QDistinct>
       distinctByPartyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'partyId');
@@ -4075,6 +4273,12 @@ extension AccountTransactionQueryProperty
       descriptionProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'description');
+    });
+  }
+
+  QueryBuilder<AccountTransaction, int, QQueryOperations> hashCodeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'hashCode');
     });
   }
 

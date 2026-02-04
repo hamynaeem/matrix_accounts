@@ -15,10 +15,11 @@ final expenseDaoProvider = Provider<ExpenseDao>((ref) {
 });
 
 // Provider for expense list
-final expenseListProvider = FutureProvider.autoDispose<List<Transaction>>((ref) async {
+final expenseListProvider =
+    FutureProvider.autoDispose<List<Transaction>>((ref) async {
   final company = ref.watch(currentCompanyProvider);
   if (company == null) return [];
-  
+
   final expenseDao = ref.watch(expenseDaoProvider);
   return await expenseDao.getExpenses(company.id);
 });
@@ -71,11 +72,11 @@ class _ExpenseListScreenState extends ConsumerState<ExpenseListScreen> {
       try {
         final isar = ref.read(isarServiceProvider).isar;
         final accountDao = AccountDao(isar);
-        
+
         await isar.writeTxn(() async {
           // Delete accounting entries
           await accountDao.deleteExpenseTransactionsInternal(expense.id);
-          
+
           // Delete expense transaction
           await isar.transactions.delete(expense.id);
         });

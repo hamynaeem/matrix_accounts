@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.matrix_accounts"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // ndkVersion removed - not needed if no native code
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -37,24 +37,44 @@ const InvoiceSchema = CollectionSchema(
       name: r'invoiceDate',
       type: IsarType.dateTime,
     ),
-    r'invoiceType': PropertySchema(
+    r'invoiceNumber': PropertySchema(
       id: 4,
+      name: r'invoiceNumber',
+      type: IsarType.string,
+    ),
+    r'invoiceType': PropertySchema(
+      id: 5,
       name: r'invoiceType',
       type: IsarType.byte,
       enumMap: _InvoiceinvoiceTypeEnumValueMap,
     ),
+    r'paidAmount': PropertySchema(
+      id: 6,
+      name: r'paidAmount',
+      type: IsarType.double,
+    ),
     r'partyId': PropertySchema(
-      id: 5,
+      id: 7,
       name: r'partyId',
       type: IsarType.long,
     ),
+    r'previousBalance': PropertySchema(
+      id: 8,
+      name: r'previousBalance',
+      type: IsarType.double,
+    ),
+    r'remainingBalance': PropertySchema(
+      id: 9,
+      name: r'remainingBalance',
+      type: IsarType.double,
+    ),
     r'status': PropertySchema(
-      id: 6,
+      id: 10,
       name: r'status',
       type: IsarType.string,
     ),
     r'transactionId': PropertySchema(
-      id: 7,
+      id: 11,
       name: r'transactionId',
       type: IsarType.long,
     )
@@ -146,6 +166,12 @@ int _invoiceEstimateSize(
 ) {
   var bytesCount = offsets.last;
   {
+    final value = object.invoiceNumber;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.status;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -164,10 +190,14 @@ void _invoiceSerialize(
   writer.writeDateTime(offsets[1], object.dueDate);
   writer.writeDouble(offsets[2], object.grandTotal);
   writer.writeDateTime(offsets[3], object.invoiceDate);
-  writer.writeByte(offsets[4], object.invoiceType.index);
-  writer.writeLong(offsets[5], object.partyId);
-  writer.writeString(offsets[6], object.status);
-  writer.writeLong(offsets[7], object.transactionId);
+  writer.writeString(offsets[4], object.invoiceNumber);
+  writer.writeByte(offsets[5], object.invoiceType.index);
+  writer.writeDouble(offsets[6], object.paidAmount);
+  writer.writeLong(offsets[7], object.partyId);
+  writer.writeDouble(offsets[8], object.previousBalance);
+  writer.writeDouble(offsets[9], object.remainingBalance);
+  writer.writeString(offsets[10], object.status);
+  writer.writeLong(offsets[11], object.transactionId);
 }
 
 Invoice _invoiceDeserialize(
@@ -182,12 +212,16 @@ Invoice _invoiceDeserialize(
   object.grandTotal = reader.readDouble(offsets[2]);
   object.id = id;
   object.invoiceDate = reader.readDateTime(offsets[3]);
+  object.invoiceNumber = reader.readStringOrNull(offsets[4]);
   object.invoiceType =
-      _InvoiceinvoiceTypeValueEnumMap[reader.readByteOrNull(offsets[4])] ??
+      _InvoiceinvoiceTypeValueEnumMap[reader.readByteOrNull(offsets[5])] ??
           InvoiceType.sale;
-  object.partyId = reader.readLong(offsets[5]);
-  object.status = reader.readStringOrNull(offsets[6]);
-  object.transactionId = reader.readLong(offsets[7]);
+  object.paidAmount = reader.readDouble(offsets[6]);
+  object.partyId = reader.readLong(offsets[7]);
+  object.previousBalance = reader.readDouble(offsets[8]);
+  object.remainingBalance = reader.readDouble(offsets[9]);
+  object.status = reader.readStringOrNull(offsets[10]);
+  object.transactionId = reader.readLong(offsets[11]);
   return object;
 }
 
@@ -207,13 +241,21 @@ P _invoiceDeserializeProp<P>(
     case 3:
       return (reader.readDateTime(offset)) as P;
     case 4:
+      return (reader.readStringOrNull(offset)) as P;
+    case 5:
       return (_InvoiceinvoiceTypeValueEnumMap[reader.readByteOrNull(offset)] ??
           InvoiceType.sale) as P;
-    case 5:
-      return (reader.readLong(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 7:
+      return (reader.readLong(offset)) as P;
+    case 8:
+      return (reader.readDouble(offset)) as P;
+    case 9:
+      return (reader.readDouble(offset)) as P;
+    case 10:
+      return (reader.readStringOrNull(offset)) as P;
+    case 11:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1097,6 +1139,155 @@ extension InvoiceQueryFilter
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'invoiceNumber',
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition>
+      invoiceNumberIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'invoiceNumber',
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'invoiceNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition>
+      invoiceNumberGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'invoiceNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'invoiceNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'invoiceNumber',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'invoiceNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'invoiceNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'invoiceNumber',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'invoiceNumber',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceNumberIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'invoiceNumber',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition>
+      invoiceNumberIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'invoiceNumber',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterFilterCondition> invoiceTypeEqualTo(
       InvoiceType value) {
     return QueryBuilder.apply(this, (query) {
@@ -1150,6 +1341,68 @@ extension InvoiceQueryFilter
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> paidAmountEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'paidAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> paidAmountGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'paidAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> paidAmountLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'paidAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> paidAmountBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'paidAmount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterFilterCondition> partyIdEqualTo(
       int value) {
     return QueryBuilder.apply(this, (query) {
@@ -1199,6 +1452,133 @@ extension InvoiceQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> previousBalanceEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'previousBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition>
+      previousBalanceGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'previousBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> previousBalanceLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'previousBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> previousBalanceBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'previousBalance',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> remainingBalanceEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'remainingBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition>
+      remainingBalanceGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'remainingBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition>
+      remainingBalanceLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'remainingBalance',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> remainingBalanceBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'remainingBalance',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
       ));
     });
   }
@@ -1459,6 +1839,18 @@ extension InvoiceQuerySortBy on QueryBuilder<Invoice, Invoice, QSortBy> {
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByInvoiceNumber() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'invoiceNumber', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByInvoiceNumberDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'invoiceNumber', Sort.desc);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByInvoiceType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'invoiceType', Sort.asc);
@@ -1471,6 +1863,18 @@ extension InvoiceQuerySortBy on QueryBuilder<Invoice, Invoice, QSortBy> {
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByPaidAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByPaidAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByPartyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'partyId', Sort.asc);
@@ -1480,6 +1884,30 @@ extension InvoiceQuerySortBy on QueryBuilder<Invoice, Invoice, QSortBy> {
   QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByPartyIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'partyId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByPreviousBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'previousBalance', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByPreviousBalanceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'previousBalance', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByRemainingBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByRemainingBalanceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.desc);
     });
   }
 
@@ -1570,6 +1998,18 @@ extension InvoiceQuerySortThenBy
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByInvoiceNumber() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'invoiceNumber', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByInvoiceNumberDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'invoiceNumber', Sort.desc);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByInvoiceType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'invoiceType', Sort.asc);
@@ -1582,6 +2022,18 @@ extension InvoiceQuerySortThenBy
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByPaidAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByPaidAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByPartyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'partyId', Sort.asc);
@@ -1591,6 +2043,30 @@ extension InvoiceQuerySortThenBy
   QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByPartyIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'partyId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByPreviousBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'previousBalance', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByPreviousBalanceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'previousBalance', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByRemainingBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByRemainingBalanceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remainingBalance', Sort.desc);
     });
   }
 
@@ -1645,15 +2121,41 @@ extension InvoiceQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QDistinct> distinctByInvoiceNumber(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'invoiceNumber',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QDistinct> distinctByInvoiceType() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'invoiceType');
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QDistinct> distinctByPaidAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'paidAmount');
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QDistinct> distinctByPartyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'partyId');
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QDistinct> distinctByPreviousBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'previousBalance');
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QDistinct> distinctByRemainingBalance() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'remainingBalance');
     });
   }
 
@@ -1703,15 +2205,39 @@ extension InvoiceQueryProperty
     });
   }
 
+  QueryBuilder<Invoice, String?, QQueryOperations> invoiceNumberProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'invoiceNumber');
+    });
+  }
+
   QueryBuilder<Invoice, InvoiceType, QQueryOperations> invoiceTypeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'invoiceType');
     });
   }
 
+  QueryBuilder<Invoice, double, QQueryOperations> paidAmountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'paidAmount');
+    });
+  }
+
   QueryBuilder<Invoice, int, QQueryOperations> partyIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'partyId');
+    });
+  }
+
+  QueryBuilder<Invoice, double, QQueryOperations> previousBalanceProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'previousBalance');
+    });
+  }
+
+  QueryBuilder<Invoice, double, QQueryOperations> remainingBalanceProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'remainingBalance');
     });
   }
 

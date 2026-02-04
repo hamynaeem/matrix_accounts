@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -100,8 +102,6 @@ class _PaymentAccountLedgerScreenState
     switch (type) {
       case PaymentAccountType.cash:
         return '1000'; // Cash account
-      case PaymentAccountType.cheque:
-        return '1050'; // Cheque account
       case PaymentAccountType.bank:
         return '1100'; // Bank account
     }
@@ -421,8 +421,6 @@ class _PaymentAccountLedgerScreenState
     switch (type) {
       case PaymentAccountType.cash:
         return 'Cash';
-      case PaymentAccountType.cheque:
-        return 'Cheque';
       case PaymentAccountType.bank:
         return 'Bank';
     }

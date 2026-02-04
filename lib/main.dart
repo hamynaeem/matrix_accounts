@@ -1,23 +1,27 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config/providers.dart';
 import 'core/config/routes.dart';
-import 'core/config/theme.dart';
+import 'core/providers/settings_provider.dart';
+import 'core/providers/sync_providers.dart';
+import 'core/services/auth_service.dart';
+import 'core/services/biometric_service.dart';
+import 'features/payments/logic/payment_providers.dart';
+import 'features/sales/logic/sales_providers.dart';
 import 'core/database/dao/account_dao.dart';
 import 'core/database/dao/payment_dao.dart';
 import 'core/database/dao/sales_dao.dart';
 import 'core/database/isar_service.dart';
+import 'core/mixins/app_lifecycle_mixin.dart';
 import 'core/database/seed_data.dart';
-import 'core/services/auth_service.dart';
-import 'features/payments/logic/payment_providers.dart';
-import 'features/sales/logic/sales_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Set up global error handling
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     print('Flutter Error: ${details.exception}');
@@ -25,37 +29,55 @@ void main() async {
   };
 
   try {
-    final isarService = IsarService();
-    await isarService.init();
-
-    // Seed database with sample data (only runs once)
-    final seedData = SeedData(isarService.isar);
-    await seedData.seedAll();
-
     final prefs = await SharedPreferences.getInstance();
     final authService = AuthService(prefs);
+    final localAuth = LocalAuthentication();
+    final biometricService = BiometricService(localAuth, prefs);
 
-    final salesDao = SalesDao(isarService.isar);
-    final paymentDao = PaymentDao(isarService.isar);
-    final accountDao = AccountDao(isarService.isar);
+    try {
+      // Try to initialize Isar - this will fail on web
+      final isarService = IsarService();
+      await isarService.init();
 
-    runApp(
-      ProviderScope(
-        overrides: [
-          isarServiceProvider.overrideWithValue(isarService),
-          authServiceProvider.overrideWithValue(authService),
-          salesDaoProvider.overrideWithValue(salesDao),
-          paymentDaoProvider.overrideWithValue(paymentDao),
-          accountDaoProvider.overrideWithValue(accountDao),
-        ],
-        child: const MatrixAccountsApp(),
-      ),
-    );
+      final seedData = SeedData(isarService.isar);
+      await seedData.seedAll();
+
+      final salesDao = SalesDao(isarService.isar);
+      final paymentDao = PaymentDao(isarService.isar);
+      final accountDao = AccountDao(isarService.isar);
+
+      runApp(
+        ProviderScope(
+          overrides: [
+            isarServiceProvider.overrideWithValue(isarService),
+            authServiceProvider.overrideWithValue(authService),
+            biometricServiceProvider.overrideWithValue(biometricService),
+            salesDaoProvider.overrideWithValue(salesDao),
+            paymentDaoProvider.overrideWithValue(paymentDao),
+            accountDaoProvider.overrideWithValue(accountDao),
+            sharedPreferencesProvider.overrideWithValue(prefs),
+          ],
+          child: const MatrixAccountsApp(),
+        ),
+      );
+    } catch (isarError) {
+      // If Isar fails (e.g., on web), run without it
+      print('Isar initialization failed (likely running on web): $isarError');
+      runApp(
+        ProviderScope(
+          overrides: [
+            authServiceProvider.overrideWithValue(authService),
+            biometricServiceProvider.overrideWithValue(biometricService),
+            sharedPreferencesProvider.overrideWithValue(prefs),
+          ],
+          child: const MatrixAccountsApp(),
+        ),
+      );
+    }
   } catch (e, stack) {
     print('Initialization error: $e');
     print('Stack trace: $stack');
 
-    // Show error UI if initialization fails
     runApp(
       MaterialApp(
         home: Scaffold(
@@ -68,24 +90,40 @@ void main() async {
   }
 }
 
-class MatrixAccountsApp extends ConsumerWidget {
+class MatrixAccountsApp extends ConsumerStatefulWidget {
   const MatrixAccountsApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MatrixAccountsApp> createState() => _MatrixAccountsAppState();
+}
+
+class _MatrixAccountsAppState extends ConsumerState<MatrixAccountsApp>
+    with WidgetsBindingObserver, AppLifecycleMixin {
+  @override
+  Widget build(BuildContext context) {
     final router = buildRouter();
+    final theme = ref.watch(themeProvider);
+    final appLockState = ref.watch(appLockStateProvider);
+
+    // If app is locked and we're not on the lock screen, navigate to lock screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (appLockState == AppLockState.locked) {
+        final currentLocation = router.routeInformationProvider.value.location;
+        if (currentLocation != '/lock') {
+          router.go('/lock');
+        }
+      }
+    });
 
     return MaterialApp.router(
       title: 'Matrix Accounts',
-      theme: buildMatrixTheme(),
+      theme: theme,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
-        // Add error boundary wrapper
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            textScaler:
-                const TextScaler.linear(1.0), // Prevent text scaling issues
+            textScaler: const TextScaler.linear(1.0),
           ),
           child: child ?? Container(),
         );

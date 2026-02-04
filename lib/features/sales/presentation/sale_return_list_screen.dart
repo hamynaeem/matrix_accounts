@@ -21,7 +21,7 @@ class SaleReturnListScreen extends ConsumerStatefulWidget {
 class _SaleReturnListScreenState extends ConsumerState<SaleReturnListScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  final _currencyFormat = NumberFormat.currency(symbol: 'PKR ');
+  final _currencyFormat = NumberFormat.currency(symbol: 'Rs ');
   final _dateFormat = DateFormat('dd MMM yyyy');
 
   @override
@@ -153,7 +153,7 @@ class _SaleReturnListScreenState extends ConsumerState<SaleReturnListScreen> {
           ),
           Expanded(
             child: FutureBuilder<List<Invoice>>(
-              future: _loadReturns(isar, company.id),
+              future: SalesInvoiceService(isar).getSaleReturns(company.id),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -164,8 +164,22 @@ class _SaleReturnListScreenState extends ConsumerState<SaleReturnListScreen> {
                 }
 
                 final returns = snapshot.data ?? [];
-                // For now, show all returns - search will be by customer name via party lookup
-                final filteredReturns = returns;
+                // Filter returns by search query (customer name or reference number)
+                final filteredReturns = returns.where((returnItem) {
+                  if (_searchQuery.isEmpty) return true;
+
+                  // Get party and transaction for filtering
+                  final partyMatch =
+                      isar.partys.getSync(returnItem.partyId)?.name ?? '';
+                  final transRef = isar.transactions
+                          .getSync(returnItem.transactionId)
+                          ?.referenceNo ??
+                      '';
+
+                  final query = _searchQuery.toLowerCase();
+                  return partyMatch.toLowerCase().contains(query) ||
+                      transRef.toLowerCase().contains(query);
+                }).toList();
 
                 if (filteredReturns.isEmpty) {
                   return Center(
@@ -217,9 +231,7 @@ class _SaleReturnListScreenState extends ConsumerState<SaleReturnListScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: InkWell(
-                            onTap: () {
-                              // TODO: Navigate to return details
-                            },
+                            onTap: () {},
                             borderRadius: BorderRadius.circular(12),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -354,18 +366,5 @@ class _SaleReturnListScreenState extends ConsumerState<SaleReturnListScreen> {
         label: const Text('New Return'),
       ),
     );
-  }
-
-  Future<List<Invoice>> _loadReturns(dynamic isar, int companyId) async {
-    // Get all invoices with status 'Return' for sale type
-    final returns = await isar.invoices
-        .filter()
-        .companyIdEqualTo(companyId)
-        .invoiceTypeEqualTo(InvoiceType.sale)
-        .statusEqualTo('Return')
-        .sortByInvoiceDateDesc()
-        .findAll();
-
-    return returns;
   }
 }

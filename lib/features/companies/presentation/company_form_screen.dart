@@ -124,7 +124,7 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
       } else {
         // Create new company
         await service.createCompany(
-          subscriberId: 1, // TODO: Get from current user
+          subscriberId: 1,
           name: _nameController.text.trim(),
           primaryCurrency: _currencyController.text.trim(),
           financialYearStartMonth: _selectedMonth,

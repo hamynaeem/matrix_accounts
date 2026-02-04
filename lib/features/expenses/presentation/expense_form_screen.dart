@@ -1,6 +1,15 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 import '../../../core/config/providers.dart';
 import '../../../core/database/dao/expense_dao.dart' as expense_dao;
@@ -61,6 +70,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   account_models.Account? _selectedExpenseAccount;
   bool _includeTax = false;
   bool _isLoading = true;
+  final ScreenshotController _screenshotController = ScreenshotController();
 
   @override
   void initState() {
@@ -180,11 +190,6 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               (a) => a.accountType == PaymentAccountType.cash,
               orElse: () => allPaymentAccounts.first,
             );
-          } else if (accountCode == '1050') {
-            matchedAccount = allPaymentAccounts.firstWhere(
-              (a) => a.accountType == PaymentAccountType.cheque,
-              orElse: () => allPaymentAccounts.first,
-            );
           } else if (accountCode == '1100') {
             matchedAccount = allPaymentAccounts.firstWhere(
               (a) => a.accountType == PaymentAccountType.bank,
@@ -237,550 +242,438 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.expenseId != null ? 'Edit Expense' : 'Add Expense'),
-        backgroundColor: Colors.deepOrange.shade700,
-        actions: [
-          Row(
-            children: [
-              const Text('Tax'),
-              Switch(
-                value: _includeTax,
-                onChanged: (value) {
-                  setState(() => _includeTax = value);
-                },
-                activeThumbColor: Colors.white,
-              ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              // TODO: Implement settings
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Expense No. and Date
+    return Screenshot(
+        controller: _screenshotController,
+        child: Scaffold(
+          appBar: AppBar(
+            title:
+                Text(widget.expenseId != null ? 'Edit Expense' : 'Add Expense'),
+            backgroundColor: Colors.deepOrange.shade700,
+            actions: [
               Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Expense No.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        TextField(
-                          controller: _refNoCtrl,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Date',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _date,
-                              firstDate: DateTime(2020),
-                              lastDate:
-                                  DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (picked != null) {
-                              setState(() => _date = picked);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '${_date.day}/${_date.month}/${_date.year}',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                                const Icon(Icons.calendar_today, size: 16),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  const Text('Tax'),
+                  Switch(
+                    value: _includeTax,
+                    onChanged: (value) {
+                      setState(() => _includeTax = value);
+                    },
+                    activeThumbColor: Colors.white,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              // Expense Category
-              Column(
+            ],
+          ),
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Expense Category',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () async {
-                      final isar = ref.read(isarServiceProvider).isar;
-                      final accounts = await isar.accounts
-                          .filter()
-                          .companyIdEqualTo(company?.id ?? 0)
-                          .accountTypeEqualTo(
-                              account_models.AccountType.expense)
-                          .findAll();
-
-                      if (context.mounted) {
-                        final selected =
-                            await showDialog<account_models.Account>(
-                          context: context,
-                          builder: (context) => _ExpenseCategoryDialog(
-                            accounts: accounts,
-                            companyId: company?.id ?? 0,
-                            isar: isar,
-                          ),
-                        );
-
-                        if (selected != null && mounted) {
-                          setState(() => _selectedExpenseAccount = selected);
-                        }
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _selectedExpenseAccount?.name ??
-                                'Select expense category',
-                            style: TextStyle(
-                              color: _selectedExpenseAccount == null
-                                  ? Colors.grey.shade600
-                                  : Colors.black,
+                  // Expense No. and Date
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Expense No.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
                             ),
-                          ),
-                          const Icon(Icons.arrow_drop_down),
-                        ],
+                            TextField(
+                              controller: _refNoCtrl,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Date',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _date,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now()
+                                      .add(const Duration(days: 365)),
+                                );
+                                if (picked != null) {
+                                  setState(() => _date = picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      '${_date.day}/${_date.month}/${_date.year}',
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                    const Icon(Icons.calendar_today, size: 16),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Expense Category
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Expense Category',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () async {
+                          final isar = ref.read(isarServiceProvider).isar;
+                          final accounts = await isar.accounts
+                              .filter()
+                              .companyIdEqualTo(company?.id ?? 0)
+                              .accountTypeEqualTo(
+                                  account_models.AccountType.expense)
+                              .findAll();
+
+                          if (context.mounted) {
+                            final selected =
+                                await showDialog<account_models.Account>(
+                              context: context,
+                              builder: (context) => _ExpenseCategoryDialog(
+                                accounts: accounts,
+                                companyId: company?.id ?? 0,
+                                isar: isar,
+                              ),
+                            );
+
+                            if (selected != null && mounted) {
+                              setState(
+                                  () => _selectedExpenseAccount = selected);
+                            }
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _selectedExpenseAccount?.name ??
+                                    'Select expense category',
+                                style: TextStyle(
+                                  color: _selectedExpenseAccount == null
+                                      ? Colors.grey.shade600
+                                      : Colors.black,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Cash Amount
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Amount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        textAlign: TextAlign.right,
+                        decoration: InputDecoration(
+                          hintText: '0.00',
+                          prefixText: 'Rs ',
+                          prefixStyle: TextStyle(
+                            color: Colors.deepOrange.shade700,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                                color: Colors.deepOrange.shade700, width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                        ),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        onChanged: (value) {
+                          final amount = double.tryParse(value) ?? 0;
+                          setState(() {
+                            // Clear existing lines and add one with the amount
+                            _lines.clear();
+                            _lines.add(ExpenseLineDraft(
+                              description:
+                                  _selectedExpenseAccount?.name ?? 'Expense',
+                              qty: 1,
+                              rate: amount,
+                            ));
+
+                            // Update payment amount
+                            if (_paymentLines.isNotEmpty) {
+                              _paymentLines.first.amount = amount;
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Payment Section
+                  const SizedBox(height: 24),
+
+                  // Save Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () =>
+                              _saveExpense(company, user, saveAndNew: true),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.all(16),
+                            side: BorderSide(color: Colors.deepOrange.shade700),
+                          ),
+                          child: Text(
+                            'Save & New',
+                            style: TextStyle(color: Colors.deepOrange.shade700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _saveExpense(company, user),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepOrange.shade700,
+                            padding: const EdgeInsets.all(16),
+                          ),
+                          child: const Text('Save'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              // Billed Items Section
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      color: Colors.grey.shade100,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          const Text(
-                            'Billed Items',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () {
-                              // TODO: Delete items
-                            },
-                            child: const Text('Delete Items'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Table Header
-                    Container(
-                      color: Colors.grey.shade200,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: const Row(
-                        children: [
-                          Expanded(
-                              flex: 3,
-                              child: Padding(
-                                padding: EdgeInsets.only(left: 16),
-                                child: Text('Item Name',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              )),
-                          Expanded(
-                              child: Text('Qty',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              child: Text('Rate',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              child: Text('Amount',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                        ],
-                      ),
-                    ),
-                    // Items
-                    ...List.generate(
-                        _lines.length, (index) => _buildLineItem(index)),
-                    // Total Row
-                    Container(
-                      color: Colors.grey.shade100,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        children: [
-                          const Expanded(
-                              flex: 3,
-                              child: Padding(
-                                padding: EdgeInsets.only(left: 16),
-                                child: Text('Total',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold)),
-                              )),
-                          Expanded(
-                            child: Text(
-                              _lines
-                                  .fold<double>(0, (sum, l) => sum + l.qty)
-                                  .toStringAsFixed(1),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const Expanded(child: SizedBox()),
-                          Expanded(
-                            child: Text(
-                              _subTotal.toStringAsFixed(2),
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Add Item Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() => _lines.add(ExpenseLineDraft()));
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Item'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange.shade100,
-                    foregroundColor: Colors.deepOrange.shade700,
-                    padding: const EdgeInsets.all(16),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Total Amount
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.deepOrange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.deepOrange.shade200),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Total Amount',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Rs ${_totalAmount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepOrange.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Payment Section
-              _buildPaymentSection(),
-              const SizedBox(height: 24),
-
-              // Save Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () =>
-                          _saveExpense(company, user, saveAndNew: true),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.all(16),
-                        side: BorderSide(color: Colors.deepOrange.shade700),
-                      ),
-                      child: Text(
-                        'Save & New',
-                        style: TextStyle(color: Colors.deepOrange.shade700),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _saveExpense(company, user),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepOrange.shade700,
-                        padding: const EdgeInsets.all(16),
-                      ),
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+        ));
   }
+
+  // Generate PDF Document
 
   Widget _buildLineItem(int index) {
     final line = _lines[index];
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Padding(
-              padding: const EdgeInsets.only(left: 16),
+              padding: const EdgeInsets.only(left: 8),
               child: TextField(
+                controller: TextEditingController(
+                  text: line.description ?? '',
+                ),
                 decoration: const InputDecoration(
                   hintText: 'Item description',
                   border: InputBorder.none,
                   isDense: true,
+                  contentPadding: EdgeInsets.zero,
                 ),
+                style: const TextStyle(fontSize: 13),
                 onChanged: (value) {
                   line.description = value;
                 },
               ),
             ),
           ),
-          Expanded(
-            child: TextField(
+          SizedBox(
+            width: 80,
+            child: TextFormField(
+              initialValue: line.qty != 1 ? line.qty.toStringAsFixed(2) : '',
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
+              textInputAction: TextInputAction.next,
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                labelText: 'Qty',
+                hintText: '0',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                      BorderSide(color: Colors.deepOrange.shade700, width: 2),
+                ),
                 isDense: true,
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
               ),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
               onChanged: (value) {
-                setState(() {
-                  line.qty = double.tryParse(value) ?? 1;
-                });
+                if (value.isNotEmpty) {
+                  final qty = double.tryParse(value);
+                  if (qty != null && qty != line.qty) {
+                    setState(() {
+                      line.qty = qty;
+                    });
+                  }
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: TextFormField(
+              initialValue: line.rate > 0 ? line.rate.toStringAsFixed(2) : '',
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              textInputAction: TextInputAction.next,
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                labelText: 'Rate',
+                hintText: '0',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide:
+                      BorderSide(color: Colors.deepOrange.shade700, width: 2),
+                ),
+                isDense: true,
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+              ),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              onChanged: (value) {
+                if (value.isNotEmpty) {
+                  final rate = double.tryParse(value);
+                  if (rate != null && rate != line.rate) {
+                    setState(() {
+                      line.rate = rate;
+                    });
+                  }
+                }
               },
             ),
           ),
           Expanded(
-            child: TextField(
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-              ),
-              onChanged: (value) {
-                setState(() {
-                  line.rate = double.tryParse(value) ?? 0;
-                });
-              },
-            ),
-          ),
-          Expanded(
+            flex: 1,
             child: Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Text(
                 line.amount.toStringAsFixed(2),
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+                textAlign: TextAlign.right,
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-            onPressed: () {
-              if (_lines.length > 1) {
-                setState(() => _lines.removeAt(index));
-              }
-            },
+          SizedBox(
+            width: 40,
+            child: IconButton(
+              icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+              onPressed: () {
+                if (_lines.length > 1) {
+                  setState(() => _lines.removeAt(index));
+                }
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPaymentSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.payment, color: Colors.deepOrange.shade700),
-                const SizedBox(width: 8),
-                const Text(
-                  'Payment Type',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            TextButton.icon(
-              onPressed: () async {
-                final paymentDao = ref.read(paymentDaoProvider);
-                final company = ref.read(currentCompanyProvider);
-                if (company != null) {
-                  final accounts =
-                      await paymentDao.getPaymentAccounts(company.id);
-                  if (context.mounted) {
-                    final selected = await showDialog<PaymentAccount>(
-                      context: context,
-                      builder: (context) => SimpleDialog(
-                        title: const Text('Select Payment Account'),
-                        children: accounts
-                            .map((account) => SimpleDialogOption(
-                                  onPressed: () =>
-                                      Navigator.pop(context, account),
-                                  child: Text(
-                                      '${account.icon ?? ''} ${account.accountName}'),
-                                ))
-                            .toList(),
-                      ),
-                    );
-
-                    if (selected != null && mounted) {
-                      setState(() {
-                        _paymentLines.add(PaymentLineDraft(
-                          accountId: selected.id,
-                          accountName: selected.accountName,
-                          accountIcon: selected.icon,
-                          amount: 0,
-                        ));
-                      });
-                    }
-                  }
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Payment Type'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ..._paymentLines.asMap().entries.map((entry) {
-          final index = entry.key;
-          final payment = entry.value;
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Text(payment.accountIcon ?? '💵',
-                      style: const TextStyle(fontSize: 24)),
-                  const SizedBox(width: 12),
-                  Text(
-                    payment.accountName ?? 'Cash',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: 150,
-                    child: TextField(
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        prefixText: 'Rs ',
-                      ),
-                      onChanged: (value) {
-                        payment.amount = double.tryParse(value) ?? 0;
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      setState(() => _paymentLines.removeAt(index));
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ],
     );
   }
 
@@ -805,7 +698,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     }
 
     final validLines = _lines
-        .where((l) => l.description?.isNotEmpty == true && l.amount > 0)
+        .where((l) =>
+            l.description?.trim().isNotEmpty == true && l.qty > 0 && l.rate > 0)
         .toList();
 
     if (validLines.isEmpty) {

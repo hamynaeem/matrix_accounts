@@ -4,7 +4,6 @@ part 'payment_models.g.dart';
 
 enum PaymentAccountType {
   cash,
-  cheque,
   bank,
 }
 
@@ -30,7 +29,7 @@ class PaymentAccount {
   late DateTime createdAt;
   DateTime? updatedAt;
 
-  // For default accounts (Cash, Cheque)
+  // For default accounts (Cash)
   late bool isDefault;
 }
 

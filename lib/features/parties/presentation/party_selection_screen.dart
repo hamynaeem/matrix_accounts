@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,13 +28,19 @@ class PartySelectionScreen extends ConsumerStatefulWidget {
 
 class _PartySelectionScreenState extends ConsumerState<PartySelectionScreen> {
   late PartyType? _selectedPartyType;
-  CustomerClass? _selectedCustomerClass;
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _selectedPartyType = widget.initialPartyType;
+    // Set default party type based on what should be shown
+    if (widget.showSuppliers && !widget.showCustomers) {
+      _selectedPartyType = PartyType.supplier;
+    } else if (!widget.showSuppliers && widget.showCustomers) {
+      _selectedPartyType = PartyType.customer;
+    } else {
+      _selectedPartyType = widget.initialPartyType;
+    }
   }
 
   @override
@@ -72,8 +80,6 @@ class _PartySelectionScreenState extends ConsumerState<PartySelectionScreen> {
                 party.name.toLowerCase().contains(_searchQuery.toLowerCase());
             final matchesType = _selectedPartyType == null ||
                 party.partyType == _selectedPartyType;
-            final matchesClass = _selectedCustomerClass == null ||
-                party.customerClass == _selectedCustomerClass;
 
             // Apply visibility filters
             if (!widget.showSuppliers &&
@@ -85,7 +91,7 @@ class _PartySelectionScreenState extends ConsumerState<PartySelectionScreen> {
               return false;
             }
 
-            return matchesSearch && matchesType && matchesClass;
+            return matchesSearch && matchesType;
           }).toList();
 
           return SingleChildScrollView(
@@ -185,44 +191,6 @@ class _PartySelectionScreenState extends ConsumerState<PartySelectionScreen> {
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(10),
-              color: Colors.grey.shade50,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: DropdownButton<CustomerClass?>(
-              value: _selectedCustomerClass,
-              isExpanded: true,
-              underline: const SizedBox(),
-              hint: const Text('Customer Type'),
-              items: const [
-                DropdownMenuItem(
-                  value: null,
-                  child: Text('All Classes'),
-                ),
-                DropdownMenuItem(
-                  value: CustomerClass.retailer,
-                  child: Text('Retailer'),
-                ),
-                DropdownMenuItem(
-                  value: CustomerClass.wholesaler,
-                  child: Text('Wholesaler'),
-                ),
-                DropdownMenuItem(
-                  value: CustomerClass.other,
-                  child: Text('Other'),
-                ),
-              ],
-              onChanged: (value) {
-                setState(() => _selectedCustomerClass = value);
-              },
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -317,24 +285,6 @@ class _PartySelectionScreenState extends ConsumerState<PartySelectionScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            if (party.partyType != PartyType.supplier)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  party.customerClass.name,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.blue.shade700,
-                                  ),
-                                ),
-                              ),
                           ],
                         ),
                         const SizedBox(height: 6),

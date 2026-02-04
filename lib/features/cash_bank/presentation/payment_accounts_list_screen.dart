@@ -1,3 +1,5 @@
+// ignore_for_file: unused_result, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -173,17 +175,17 @@ class _PaymentAccountsListScreenState
                   },
                 ),
                 const SizedBox(width: 8),
-                _buildFilterChip(
-                  label: 'Cheque',
-                  isSelected: selectedType == PaymentAccountType.cheque,
-                  onTap: () {
-                    setState(() {
-                      selectedType = selectedType == PaymentAccountType.cheque
-                          ? null
-                          : PaymentAccountType.cheque;
-                    });
-                  },
-                ),
+                // _buildFilterChip(
+                //   label: 'Cheque',
+                //   isSelected: selectedType == PaymentAccountType.cheque,
+                //   onTap: () {
+                //     setState(() {
+                //       selectedType = selectedType == PaymentAccountType.cheque
+                //           ? null
+                //           : PaymentAccountType.cheque;
+                //     });
+                //   },
+                // ),
               ],
             ),
           ),
@@ -485,6 +487,18 @@ class _PaymentAccountsListScreenState
                             horizontal: 8, vertical: 4),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () => _deleteAccount(account),
+                      icon:
+                          const Icon(Icons.delete, size: 16, color: Colors.red),
+                      label: const Text('Delete',
+                          style: TextStyle(fontSize: 12, color: Colors.red)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -503,9 +517,6 @@ class _PaymentAccountsListScreenState
       case PaymentAccountType.cash:
         accountCode = '1000'; // Cash account
         break;
-      case PaymentAccountType.cheque:
-        accountCode = '1050'; // Cheque account
-        break;
       case PaymentAccountType.bank:
         accountCode = '1100'; // Bank account
         break;
@@ -519,8 +530,6 @@ class _PaymentAccountsListScreenState
         return Colors.green;
       case PaymentAccountType.bank:
         return Colors.blue;
-      case PaymentAccountType.cheque:
-        return Colors.orange;
     }
   }
 
@@ -530,8 +539,6 @@ class _PaymentAccountsListScreenState
         return '💵';
       case PaymentAccountType.bank:
         return '🏦';
-      case PaymentAccountType.cheque:
-        return '📄';
     }
   }
 
@@ -592,5 +599,59 @@ class _PaymentAccountsListScreenState
       selectedType = null;
       searchQuery = '';
     });
+  }
+
+  Future<void> _deleteAccount(PaymentAccount account) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: Text(
+          'Are you sure you want to delete "${account.accountName}"?',
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final isar = ref.read(isarServiceProvider).isar;
+        await isar.writeTxn(() async {
+          await isar.paymentAccounts.delete(account.id);
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          ref.refresh(cashBankAccountsProvider);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting account: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

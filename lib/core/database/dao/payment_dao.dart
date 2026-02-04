@@ -33,17 +33,6 @@ class PaymentDao {
           ..isDefault = true
           ..createdAt = DateTime.now();
         await isar.paymentAccounts.put(cash);
-
-        // Create Cheque account
-        final cheque = PaymentAccount()
-          ..companyId = companyId
-          ..accountType = PaymentAccountType.cheque
-          ..accountName = 'Cheque'
-          ..icon = '📝'
-          ..isActive = true
-          ..isDefault = true
-          ..createdAt = DateTime.now();
-        await isar.paymentAccounts.put(cheque);
       });
     }
   }
@@ -79,12 +68,7 @@ class PaymentDao {
         ..bankName = bankName
         ..accountNumber = accountNumber
         ..ifscCode = ifscCode
-        ..icon = icon ??
-            (accountType == PaymentAccountType.cash
-                ? '💵'
-                : accountType == PaymentAccountType.cheque
-                    ? '📝'
-                    : '🏦')
+        ..icon = icon ?? (accountType == PaymentAccountType.cash ? '💵' : '🏦')
         ..isActive = true
         ..isDefault = false
         ..createdAt = DateTime.now();
@@ -209,8 +193,6 @@ class PaymentDao {
           String accountCode;
           if (paymentAccount.accountType == PaymentAccountType.cash) {
             accountCode = '1000'; // Cash account
-          } else if (paymentAccount.accountType == PaymentAccountType.cheque) {
-            accountCode = '1050'; // Cheque account
           } else {
             accountCode = '1100'; // Bank account
           }
@@ -293,8 +275,6 @@ class PaymentDao {
           String accountCode;
           if (paymentAccount.accountType == PaymentAccountType.cash) {
             accountCode = '1000'; // Cash account
-          } else if (paymentAccount.accountType == PaymentAccountType.cheque) {
-            accountCode = '1050'; // Cheque account
           } else {
             accountCode = '1100'; // Bank account
           }
@@ -411,8 +391,6 @@ class PaymentDao {
           String accountCode;
           if (paymentAccount.accountType == PaymentAccountType.cash) {
             accountCode = '1000'; // Cash account
-          } else if (paymentAccount.accountType == PaymentAccountType.cheque) {
-            accountCode = '1050'; // Cheque account
           } else {
             accountCode = '1100'; // Bank account
           }
@@ -495,8 +473,6 @@ class PaymentDao {
           String accountCode;
           if (paymentAccount.accountType == PaymentAccountType.cash) {
             accountCode = '1000'; // Cash account
-          } else if (paymentAccount.accountType == PaymentAccountType.cheque) {
-            accountCode = '1050'; // Cheque account
           } else {
             accountCode = '1100'; // Bank account
           }

@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
@@ -706,7 +708,8 @@ class _TrialBalanceScreenState extends ConsumerState<TrialBalanceScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.tips_and_updates, color: Colors.indigo, size: 18),
+                const Icon(Icons.tips_and_updates,
+                    color: Colors.indigo, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

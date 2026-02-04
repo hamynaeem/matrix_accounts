@@ -4,8 +4,6 @@ part 'party_model.g.dart';
 
 enum PartyType { customer, supplier, both }
 
-enum CustomerClass { retailer, wholesaler, other }
-
 @collection
 class Party {
   Id id = Isar.autoIncrement;
@@ -19,9 +17,6 @@ class Party {
   @Index()
   @enumerated
   late PartyType partyType;
-
-  @enumerated
-  CustomerClass customerClass = CustomerClass.retailer;
 
   String? phone;
   String? email;

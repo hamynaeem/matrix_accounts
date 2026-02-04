@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously, avoid_print
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -215,6 +217,7 @@ class _PaymentInFormScreenState extends ConsumerState<PaymentInFormScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.blueAccent,
         title:
             Text(widget.paymentInId != null ? 'Edit Payment In' : 'Payment-In'),
         elevation: 0,
@@ -404,26 +407,7 @@ class _PaymentInFormScreenState extends ConsumerState<PaymentInFormScreen> {
                         return _buildPaymentLine(line, accounts, index);
                       }).toList(),
                       const SizedBox(height: 16),
-                      InkWell(
-                        onTap: () => _showPaymentTypeDialog(accounts),
-                        child: Row(
-                          children: [
-                            Icon(Icons.add_circle_outline,
-                                color: Colors.blue.shade700),
-                            const SizedBox(width: 8),
-                            Text(
-                              '+ Add Payment Type',
-                              style: TextStyle(
-                                color: Colors.blue.shade700,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       if (_paymentLines.isNotEmpty) ...[
-                        const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(

@@ -28,6 +28,13 @@ class Invoice {
 
   double grandTotal = 0;
   String? status;
+
+  // Running balance fields for purchase system
+  double previousBalance = 0; // Unpaid balance from previous invoices
+  double paidAmount = 0; // Amount paid on this invoice
+  double remainingBalance =
+      0; // Unpaid amount (previousBalance + grandTotal - paidAmount)
+  String? invoiceNumber; // For better tracking
 }
 
 enum StockMovementType {

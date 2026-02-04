@@ -6,9 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../core/config/providers.dart';
 import '../../../data/models/account_models.dart';
 
-// NOTE: This feature is not yet implemented. The JournalEntryGroup model
-// and related AccountDao methods need to be created.
-
 class JournalEntryListScreen extends ConsumerStatefulWidget {
   const JournalEntryListScreen({Key? key}) : super(key: key);
 

@@ -5,6 +5,5 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final expenseListProvider =
     FutureProvider.autoDispose<List<dynamic>>((ref) async {
-  // TODO: Fetch expense list from database
   return [];
 });

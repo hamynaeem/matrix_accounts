@@ -5,6 +5,7 @@ import '../../data/models/user_model.dart';
 import '../database/dao/account_dao.dart';
 import '../database/isar_service.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 
 final isarServiceProvider = Provider<IsarService>((ref) {
   throw UnimplementedError('IsarService must be overridden in main.dart');
@@ -12,6 +13,10 @@ final isarServiceProvider = Provider<IsarService>((ref) {
 
 final authServiceProvider = Provider<AuthService>((ref) {
   throw UnimplementedError('AuthService must be overridden in main.dart');
+});
+
+final biometricServiceProvider = Provider<BiometricService>((ref) {
+  throw UnimplementedError('BiometricService must be overridden in main.dart');
 });
 
 final currentUserProvider = StateProvider<User?>((ref) => null);

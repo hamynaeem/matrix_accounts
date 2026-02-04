@@ -362,7 +362,8 @@ class ReceiptGenerator {
               if (pdfImage != null) ...[
                 pw.SizedBox(height: 30),
                 pw.Center(
-                  child: pw.Image(pdfImage, height: 200),
+                  child:
+                      pw.Image(pdfImage, height: 200, fit: pw.BoxFit.contain),
                 ),
               ],
             ],

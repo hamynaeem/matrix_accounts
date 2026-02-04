@@ -154,7 +154,7 @@ class _PurchaseReturnListScreenState
           ),
           Expanded(
             child: FutureBuilder<List<Invoice>>(
-              future: _loadReturns(isar, company.id),
+              future: null,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -218,9 +218,7 @@ class _PurchaseReturnListScreenState
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: InkWell(
-                            onTap: () {
-                              // TODO: Navigate to return details
-                            },
+                            onTap: () {},
                             borderRadius: BorderRadius.circular(12),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -355,18 +353,5 @@ class _PurchaseReturnListScreenState
         label: const Text('New Return'),
       ),
     );
-  }
-
-  Future<List<Invoice>> _loadReturns(dynamic isar, int companyId) async {
-    // Get all invoices with status 'Return' for purchase type
-    final returns = await isar.invoices
-        .filter()
-        .companyIdEqualTo(companyId)
-        .invoiceTypeEqualTo(InvoiceType.purchase)
-        .statusEqualTo('Return')
-        .sortByInvoiceDateDesc()
-        .findAll();
-
-    return returns;
   }
 }

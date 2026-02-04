@@ -92,7 +92,70 @@ class PurchaseInvoiceService {
 
       // Delete invoice
       await isar.invoices.delete(invoiceId);
+
+      // Recalculate running balances for all subsequent invoices
+      await _recalculateRunningBalances(invoice.companyId, invoice.partyId);
     });
+  }
+
+  // Calculate previous unpaid balance for a supplier
+  Future<double> calculatePreviousBalance(int companyId, int partyId,
+      {DateTime? beforeDate}) async {
+    final query = isar.invoices
+        .filter()
+        .companyIdEqualTo(companyId)
+        .partyIdEqualTo(partyId)
+        .invoiceTypeEqualTo(InvoiceType.purchase);
+
+    final invoices = beforeDate != null
+        ? await query.invoiceDateLessThan(beforeDate).findAll()
+        : await query.findAll();
+
+    double totalUnpaid = 0;
+    for (final invoice in invoices) {
+      totalUnpaid += invoice.remainingBalance;
+    }
+
+    return totalUnpaid;
+  }
+
+  // Update running balance for an invoice
+  Future<void> updateInvoiceBalance(int invoiceId, double paidAmount) async {
+    await isar.writeTxn(() async {
+      final invoice = await isar.invoices.get(invoiceId);
+      if (invoice == null) return;
+
+      invoice.paidAmount = paidAmount;
+      invoice.remainingBalance =
+          invoice.previousBalance + invoice.grandTotal - paidAmount;
+
+      await isar.invoices.put(invoice);
+
+      // Recalculate subsequent invoices
+      await _recalculateRunningBalances(invoice.companyId, invoice.partyId);
+    });
+  }
+
+  // Recalculate running balances for all invoices of a supplier
+  Future<void> _recalculateRunningBalances(int companyId, int partyId) async {
+    final invoices = await isar.invoices
+        .filter()
+        .companyIdEqualTo(companyId)
+        .partyIdEqualTo(partyId)
+        .invoiceTypeEqualTo(InvoiceType.purchase)
+        .sortByInvoiceDate()
+        .findAll();
+
+    double runningBalance = 0;
+
+    for (final invoice in invoices) {
+      invoice.previousBalance = runningBalance;
+      invoice.remainingBalance =
+          invoice.previousBalance + invoice.grandTotal - invoice.paidAmount;
+      runningBalance = invoice.remainingBalance;
+
+      await isar.invoices.put(invoice);
+    }
   }
 
   // Delete purchase return

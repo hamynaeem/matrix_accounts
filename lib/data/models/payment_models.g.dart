@@ -231,12 +231,10 @@ P _paymentAccountDeserializeProp<P>(
 
 const _PaymentAccountaccountTypeEnumValueMap = {
   r'cash': r'cash',
-  r'cheque': r'cheque',
   r'bank': r'bank',
 };
 const _PaymentAccountaccountTypeValueEnumMap = {
   r'cash': PaymentAccountType.cash,
-  r'cheque': PaymentAccountType.cheque,
   r'bank': PaymentAccountType.bank,
 };
 

@@ -85,8 +85,9 @@ class _ProfitReportScreenState extends ConsumerState<ProfitReportScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         TextButton(
                           onPressed: () => _setDateRange('today'),
@@ -512,21 +513,41 @@ class _ProfitReportScreenState extends ConsumerState<ProfitReportScreen> {
             ),
             const SizedBox(height: 8),
             if (invoice.type == TransactionType.sale) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Sale: Rs. ${invoice.saleAmount.toStringAsFixed(2)}'),
-                  Text('Cost: Rs. ${invoice.costAmount.toStringAsFixed(2)}'),
-                  Text(
-                    'Profit: Rs. ${profit.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: profit >= 0 ? Colors.green : Colors.red,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                            'Sale: Rs. ${invoice.saleAmount.toStringAsFixed(2)}'),
+                      ),
+                      Expanded(
+                        child: Text(
+                            'Cost: Rs. ${invoice.costAmount.toStringAsFixed(2)}'),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Margin: ${margin.toStringAsFixed(1)}%',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Profit: Rs. ${profit.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: profit >= 0 ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Margin: ${margin.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade700),
+                      ),
+                    ],
                   ),
                 ],
               ),

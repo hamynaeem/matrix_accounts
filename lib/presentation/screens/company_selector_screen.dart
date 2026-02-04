@@ -22,6 +22,7 @@ class _CompanySelectorScreenState extends ConsumerState<CompanySelectorScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.blueAccent,
         title: const Text('Select Company'),
         elevation: 0,
         actions: [

@@ -37,45 +37,39 @@ const PartySchema = CollectionSchema(
       name: r'creditLimit',
       type: IsarType.double,
     ),
-    r'customerClass': PropertySchema(
-      id: 4,
-      name: r'customerClass',
-      type: IsarType.byte,
-      enumMap: _PartycustomerClassEnumValueMap,
-    ),
     r'email': PropertySchema(
-      id: 5,
+      id: 4,
       name: r'email',
       type: IsarType.string,
     ),
     r'isActive': PropertySchema(
-      id: 6,
+      id: 5,
       name: r'isActive',
       type: IsarType.bool,
     ),
     r'name': PropertySchema(
-      id: 7,
+      id: 6,
       name: r'name',
       type: IsarType.string,
     ),
     r'openingBalance': PropertySchema(
-      id: 8,
+      id: 7,
       name: r'openingBalance',
       type: IsarType.double,
     ),
     r'partyType': PropertySchema(
-      id: 9,
+      id: 8,
       name: r'partyType',
       type: IsarType.byte,
       enumMap: _PartypartyTypeEnumValueMap,
     ),
     r'paymentTermsDays': PropertySchema(
-      id: 10,
+      id: 9,
       name: r'paymentTermsDays',
       type: IsarType.long,
     ),
     r'phone': PropertySchema(
-      id: 11,
+      id: 10,
       name: r'phone',
       type: IsarType.string,
     )
@@ -172,14 +166,13 @@ void _partySerialize(
   writer.writeLong(offsets[1], object.companyId);
   writer.writeDateTime(offsets[2], object.createdAt);
   writer.writeDouble(offsets[3], object.creditLimit);
-  writer.writeByte(offsets[4], object.customerClass.index);
-  writer.writeString(offsets[5], object.email);
-  writer.writeBool(offsets[6], object.isActive);
-  writer.writeString(offsets[7], object.name);
-  writer.writeDouble(offsets[8], object.openingBalance);
-  writer.writeByte(offsets[9], object.partyType.index);
-  writer.writeLong(offsets[10], object.paymentTermsDays);
-  writer.writeString(offsets[11], object.phone);
+  writer.writeString(offsets[4], object.email);
+  writer.writeBool(offsets[5], object.isActive);
+  writer.writeString(offsets[6], object.name);
+  writer.writeDouble(offsets[7], object.openingBalance);
+  writer.writeByte(offsets[8], object.partyType.index);
+  writer.writeLong(offsets[9], object.paymentTermsDays);
+  writer.writeString(offsets[10], object.phone);
 }
 
 Party _partyDeserialize(
@@ -193,19 +186,16 @@ Party _partyDeserialize(
   object.companyId = reader.readLong(offsets[1]);
   object.createdAt = reader.readDateTime(offsets[2]);
   object.creditLimit = reader.readDouble(offsets[3]);
-  object.customerClass =
-      _PartycustomerClassValueEnumMap[reader.readByteOrNull(offsets[4])] ??
-          CustomerClass.retailer;
-  object.email = reader.readStringOrNull(offsets[5]);
+  object.email = reader.readStringOrNull(offsets[4]);
   object.id = id;
-  object.isActive = reader.readBool(offsets[6]);
-  object.name = reader.readString(offsets[7]);
-  object.openingBalance = reader.readDouble(offsets[8]);
+  object.isActive = reader.readBool(offsets[5]);
+  object.name = reader.readString(offsets[6]);
+  object.openingBalance = reader.readDouble(offsets[7]);
   object.partyType =
-      _PartypartyTypeValueEnumMap[reader.readByteOrNull(offsets[9])] ??
+      _PartypartyTypeValueEnumMap[reader.readByteOrNull(offsets[8])] ??
           PartyType.customer;
-  object.paymentTermsDays = reader.readLong(offsets[10]);
-  object.phone = reader.readStringOrNull(offsets[11]);
+  object.paymentTermsDays = reader.readLong(offsets[9]);
+  object.phone = reader.readStringOrNull(offsets[10]);
   return object;
 }
 
@@ -225,38 +215,25 @@ P _partyDeserializeProp<P>(
     case 3:
       return (reader.readDouble(offset)) as P;
     case 4:
-      return (_PartycustomerClassValueEnumMap[reader.readByteOrNull(offset)] ??
-          CustomerClass.retailer) as P;
-    case 5:
       return (reader.readStringOrNull(offset)) as P;
-    case 6:
+    case 5:
       return (reader.readBool(offset)) as P;
-    case 7:
+    case 6:
       return (reader.readString(offset)) as P;
-    case 8:
+    case 7:
       return (reader.readDouble(offset)) as P;
-    case 9:
+    case 8:
       return (_PartypartyTypeValueEnumMap[reader.readByteOrNull(offset)] ??
           PartyType.customer) as P;
-    case 10:
+    case 9:
       return (reader.readLong(offset)) as P;
-    case 11:
+    case 10:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
 }
 
-const _PartycustomerClassEnumValueMap = {
-  'retailer': 0,
-  'wholesaler': 1,
-  'other': 2,
-};
-const _PartycustomerClassValueEnumMap = {
-  0: CustomerClass.retailer,
-  1: CustomerClass.wholesaler,
-  2: CustomerClass.other,
-};
 const _PartypartyTypeEnumValueMap = {
   'customer': 0,
   'supplier': 1,
@@ -905,59 +882,6 @@ extension PartyQueryFilter on QueryBuilder<Party, Party, QFilterCondition> {
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Party, Party, QAfterFilterCondition> customerClassEqualTo(
-      CustomerClass value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'customerClass',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<Party, Party, QAfterFilterCondition> customerClassGreaterThan(
-    CustomerClass value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'customerClass',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<Party, Party, QAfterFilterCondition> customerClassLessThan(
-    CustomerClass value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'customerClass',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<Party, Party, QAfterFilterCondition> customerClassBetween(
-    CustomerClass lower,
-    CustomerClass upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'customerClass',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
       ));
     });
   }
@@ -1662,18 +1586,6 @@ extension PartyQuerySortBy on QueryBuilder<Party, Party, QSortBy> {
     });
   }
 
-  QueryBuilder<Party, Party, QAfterSortBy> sortByCustomerClass() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'customerClass', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Party, Party, QAfterSortBy> sortByCustomerClassDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'customerClass', Sort.desc);
-    });
-  }
-
   QueryBuilder<Party, Party, QAfterSortBy> sortByEmail() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'email', Sort.asc);
@@ -1808,18 +1720,6 @@ extension PartyQuerySortThenBy on QueryBuilder<Party, Party, QSortThenBy> {
     });
   }
 
-  QueryBuilder<Party, Party, QAfterSortBy> thenByCustomerClass() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'customerClass', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Party, Party, QAfterSortBy> thenByCustomerClassDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'customerClass', Sort.desc);
-    });
-  }
-
   QueryBuilder<Party, Party, QAfterSortBy> thenByEmail() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'email', Sort.asc);
@@ -1943,12 +1843,6 @@ extension PartyQueryWhereDistinct on QueryBuilder<Party, Party, QDistinct> {
     });
   }
 
-  QueryBuilder<Party, Party, QDistinct> distinctByCustomerClass() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'customerClass');
-    });
-  }
-
   QueryBuilder<Party, Party, QDistinct> distinctByEmail(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2023,12 +1917,6 @@ extension PartyQueryProperty on QueryBuilder<Party, Party, QQueryProperty> {
   QueryBuilder<Party, double, QQueryOperations> creditLimitProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'creditLimit');
-    });
-  }
-
-  QueryBuilder<Party, CustomerClass, QQueryOperations> customerClassProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'customerClass');
     });
   }
 

@@ -82,8 +82,6 @@ class ExpenseDao {
         switch (paymentAccount.accountType) {
           case PaymentAccountType.cash:
             accountCode = '1000';
-          case PaymentAccountType.cheque:
-            accountCode = '1050';
           case PaymentAccountType.bank:
             accountCode = '1100';
         }
@@ -162,8 +160,6 @@ class ExpenseDao {
         switch (paymentAccount.accountType) {
           case PaymentAccountType.cash:
             accountCode = '1000';
-          case PaymentAccountType.cheque:
-            accountCode = '1050';
           case PaymentAccountType.bank:
             accountCode = '1100';
         }

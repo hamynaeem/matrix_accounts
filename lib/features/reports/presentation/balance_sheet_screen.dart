@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
@@ -272,438 +274,96 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Accounting Equation Display
-                    _buildAccountingEquation(),
-                    const SizedBox(height: 24),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left Column: Assets
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildSectionHeader('Assets', Colors.blue),
-                              const SizedBox(height: 12),
-                              _buildAccountList(_assetAccounts),
-                              const Divider(thickness: 2, height: 24),
-                              _buildTotalRow(
-                                'Total Assets',
-                                _totalAssets,
-                                Colors.blue.shade700,
-                                isBold: true,
+                    // Simplified Balance Sheet - Only Cash, Bank, Balance
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Financial Summary',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal.shade700,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 20),
+                            _buildSimplifiedBalanceItem(
+                              'Cash in Hand',
+                              _getCashInHandAmount(),
+                              Icons.money,
+                              Colors.green,
+                            ),
+                            const Divider(height: 32),
+                            _buildSimplifiedBalanceItem(
+                              'Bank Amount',
+                              _getBankAmount(),
+                              Icons.account_balance,
+                              Colors.blue,
+                            ),
+                            const Divider(height: 32),
+                            _buildSimplifiedBalanceItem(
+                              'Net Balance',
+                              _getNetBalance(),
+                              Icons.account_balance_wallet,
+                              Colors.purple,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        // Right Column: Liabilities & Equity
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Liabilities Section
-                              _buildSectionHeader('Liabilities', Colors.red),
-                              const SizedBox(height: 12),
-                              _buildAccountList(_liabilityAccounts),
-                              const Divider(thickness: 1, height: 24),
-                              _buildTotalRow(
-                                'Total Liabilities',
-                                _totalLiabilities,
-                                Colors.red.shade700,
-                              ),
-                              const SizedBox(height: 24),
-                              // Equity Section
-                              _buildSectionHeader('Equity', Colors.green),
-                              const SizedBox(height: 12),
-                              _buildAccountList(_equityAccounts),
-                              const SizedBox(height: 8),
-                              // Net Income (added to equity)
-                              _buildAccountRow(
-                                'Net Income (Current Period)',
-                                _netIncome,
-                                isSubtotal: true,
-                              ),
-                              const Divider(thickness: 1, height: 24),
-                              _buildTotalRow(
-                                'Total Equity',
-                                _totalEquity + _netIncome,
-                                Colors.green.shade700,
-                              ),
-                              const Divider(thickness: 2, height: 24),
-                              _buildTotalRow(
-                                'Total Liabilities & Equity',
-                                _totalLiabilities + _totalEquity + _netIncome,
-                                Colors.purple.shade700,
-                                isBold: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 24),
-                    // Balance Check
-                    _buildBalanceCheck(),
-                    const SizedBox(height: 16),
-                    // Legend
-                    _buildLegend(),
+                    // Total Summary Card
+                    Card(
+                      elevation: 3,
+                      color: Colors.teal.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.assessment,
+                              size: 32,
+                              color: Colors.teal.shade700,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Total Available Funds',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.teal.shade800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'PKR ${(_getCashInHandAmount() + _getBankAmount()).toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.teal.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAccountingEquation() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.indigo.shade50, Colors.indigo.shade100],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.indigo.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.functions, color: Colors.indigo.shade700, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Accounting Equation',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.indigo.shade900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildEquationBox('Assets', _totalAssets, Colors.blue),
-              const Text('=',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              _buildEquationBox('Liabilities', _totalLiabilities, Colors.red),
-              const Text('+',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              _buildEquationBox(
-                  'Equity', _totalEquity + _netIncome, Colors.green),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEquationBox(String label, double value, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatCurrency(value),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.account_balance, color: color, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAccountList(List<Account> accounts) {
-    if (accounts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          'No accounts',
-          style: TextStyle(
-            color: Colors.grey.shade600,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: accounts.map((account) {
-        return _buildAccountRow(account.name, account.currentBalance);
-      }).toList(),
-    );
-  }
-
-  Widget _buildAccountRow(String name, double balance,
-      {bool isSubtotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                fontSize: 14,
-                color: isSubtotal ? Colors.grey.shade700 : Colors.grey.shade800,
-                fontWeight: isSubtotal ? FontWeight.w600 : FontWeight.normal,
-                fontStyle: isSubtotal ? FontStyle.italic : FontStyle.normal,
-              ),
-            ),
-          ),
-          Text(
-            _formatCurrency(balance),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isSubtotal ? FontWeight.w600 : FontWeight.normal,
-              color: balance >= 0 ? Colors.black87 : Colors.red.shade700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTotalRow(String label, double amount, Color color,
-      {bool isBold = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: isBold ? 16 : 15,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: color,
-            ),
-          ),
-          Text(
-            _formatCurrency(amount),
-            style: TextStyle(
-              fontSize: isBold ? 16 : 15,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBalanceCheck() {
-    final isBalanced =
-        (_totalAssets - (_totalLiabilities + _totalEquity + _netIncome)).abs() <
-            0.01;
-    final difference =
-        _totalAssets - (_totalLiabilities + _totalEquity + _netIncome);
-
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: isBalanced ? Colors.green.shade50 : Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isBalanced ? Colors.green.shade300 : Colors.red.shade300,
-          width: 2,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isBalanced ? Icons.check_circle : Icons.warning,
-            color: isBalanced ? Colors.green.shade700 : Colors.red.shade700,
-            size: 32,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isBalanced
-                      ? 'Balance Sheet is Balanced ✓'
-                      : 'Balance Sheet is Out of Balance!',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isBalanced
-                        ? Colors.green.shade900
-                        : Colors.red.shade900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isBalanced
-                      ? 'Assets = Liabilities + Equity'
-                      : 'Difference: ${_formatCurrency(difference)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isBalanced
-                        ? Colors.green.shade700
-                        : Colors.red.shade700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegend() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.grey.shade700, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Understanding the Balance Sheet',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildLegendItem(
-            'Assets',
-            'What the company owns (Cash, Inventory, Receivables)',
-            Colors.blue,
-          ),
-          const SizedBox(height: 8),
-          _buildLegendItem(
-            'Liabilities',
-            'What the company owes (Payables, Loans)',
-            Colors.red,
-          ),
-          const SizedBox(height: 8),
-          _buildLegendItem(
-            'Equity',
-            'Owner\'s investment + Retained Earnings',
-            Colors.green,
-          ),
-          const SizedBox(height: 8),
-          _buildLegendItem(
-            'Net Income',
-            'Current period profit (Revenue - Expenses)',
-            Colors.purple,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(String title, String description, Color color) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          margin: const EdgeInsets.only(top: 2),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.2),
-            border: Border.all(color: color, width: 2),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -724,7 +384,69 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     }
   }
 
-  String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(2);
+  Widget _buildSimplifiedBalanceItem(
+      String title, double amount, IconData icon, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'PKR ${amount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  double _getCashInHandAmount() {
+    // Find cash account from asset accounts
+    final cashAccount = _assetAccounts.where(
+      (account) => account.name.toLowerCase().contains('cash'),
+    );
+    return cashAccount.isNotEmpty ? cashAccount.first.currentBalance : 0.0;
+  }
+
+  double _getBankAmount() {
+    // Find bank account from asset accounts
+    final bankAccount = _assetAccounts.where(
+      (account) => account.name.toLowerCase().contains('bank'),
+    );
+    return bankAccount.isNotEmpty ? bankAccount.first.currentBalance : 0.0;
+  }
+
+  double _getNetBalance() {
+    // Calculate net balance (Assets - Liabilities)
+    return _totalAssets - _totalLiabilities;
   }
 }

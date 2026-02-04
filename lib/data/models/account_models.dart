@@ -47,6 +47,20 @@ class Account {
   bool isActive = true;
 
   DateTime createdAt = DateTime.now();
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Account && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() {
+    return 'Account{id: $id, name: $name, code: $code, accountType: $accountType, currentBalance: $currentBalance}';
+  }
 }
 
 @collection
@@ -80,4 +94,18 @@ class AccountTransaction {
   int? partyId; // Customer or supplier ID if applicable
 
   DateTime createdAt = DateTime.now();
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Account && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() {
+    return 'AccountTransaction{id: $id, accountId: $accountId, transactionType: $transactionType, debit: $debit, credit: $credit}';
+  }
 }

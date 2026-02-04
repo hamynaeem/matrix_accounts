@@ -66,9 +66,7 @@ class SideMenu extends ConsumerWidget {
                     IconButton(
                       icon: const Icon(Icons.sync),
                       tooltip: 'Manual Sync',
-                      onPressed: () {
-                        // TODO: trigger sync
-                      },
+                      onPressed: () {},
                     ),
                   ],
                 )

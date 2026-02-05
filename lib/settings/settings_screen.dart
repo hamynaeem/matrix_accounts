@@ -7,6 +7,7 @@ import 'package:matrix_accounts/features/settings/presentation/company_settings_
     show CompanySettingsScreen;
 import 'package:matrix_accounts/settings/financial_year_settings_screen.dart';
 import 'package:matrix_accounts/settings/lock_screen.dart';
+import 'package:matrix_accounts/settings/share_user_screen.dart';
 import 'package:matrix_accounts/settings/tax_settings_screen.dart';
 import 'package:matrix_accounts/settings/theme_settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -293,8 +294,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             fontSize: 22,
           ),
         ),
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
+        backgroundColor: Colors.blueAccent,
         elevation: 0,
         centerTitle: true,
       ),
@@ -326,30 +326,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 },
               ),
               const Divider(height: 1, indent: 56),
-              _buildModernListTile(
-                title: 'Tax Settings',
-                subtitle: 'Configure tax rates',
-                icon: Icons.receipt_long,
-                onTap: () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const TaxSettingsScreen()));
-                },
-              ),
-              const Divider(height: 1, indent: 56),
-              _buildModernListTile(
-                title: 'Financial Year',
-                subtitle: 'Set financial year dates',
-                icon: Icons.calendar_today,
-                onTap: () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                              const FinancialYearSettingsScreen()));
-                },
-              ),
               const Divider(height: 1, indent: 56),
               _buildModernListTile(
                 title: 'Company Settings',
@@ -363,16 +339,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 },
               ),
               const Divider(height: 1, indent: 56),
+            ],
+          ),
+
+          // User Profile Section
+          _buildSectionHeader('User Profile'),
+          _buildModernCard(
+            children: [
               _buildModernListTile(
-                title: 'Lock Screen Settings',
-                subtitle: 'Configure app lock options',
-                icon: Icons.lock_outline,
+                title: 'User Settings',
+                subtitle: 'Manage your profile and preferences',
+                icon: Icons.account_circle_outlined,
+                iconColor: Colors.blue,
                 onTap: () {
                   Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const LockScreen()));
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ShareUserScreen(),
+                    ),
+                  );
                 },
+                isFirst: true,
                 isLast: true,
               ),
             ],
@@ -403,111 +390,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onTap: _showCurrencyDialog,
               ),
               const Divider(height: 1, indent: 56),
-              _buildModernListTile(
-                title: 'Date Format',
-                subtitle: _dateFormat,
-                icon: Icons.date_range_outlined,
-                onTap: _showDateFormatDialog,
-                isLast: true,
-              ),
-            ],
-          ),
-
-          // Security Section
-          _buildSectionHeader('Security'),
-          _buildModernCard(
-            children: [
-              Consumer(
-                builder: (context, ref, child) {
-                  final biometricService = ref.read(biometricServiceProvider);
-                  return FutureBuilder<String>(
-                    future:
-                        biometricService.getBiometricCapabilityDescription(),
-                    builder: (context, snapshot) {
-                      final capability = snapshot.data ?? 'Checking...';
-                      final isEnabled = biometricService.isBiometricEnabled;
-
-                      return _buildModernSwitchTile(
-                        title: 'Biometric Authentication',
-                        subtitle: capability,
-                        value: isEnabled,
-                        icon: Icons.fingerprint,
-                        enabled: snapshot.hasData,
-                        onChanged: snapshot.hasData
-                            ? (value) async {
-                                if (value) {
-                                  await _enableBiometricAuth();
-                                } else {
-                                  await _disableBiometricAuth();
-                                }
-                              }
-                            : (_) {},
-                        isFirst: true,
-                      );
-                    },
-                  );
-                },
-              ),
-              const Divider(height: 1, indent: 56),
-              Consumer(
-                builder: (context, ref, child) {
-                  final biometricService = ref.read(biometricServiceProvider);
-                  return _buildModernListTile(
-                    title: 'Auto-Lock Duration',
-                    subtitle: _getAutoLockText(_autoLockDuration),
-                    icon: Icons.timer_outlined,
-                    iconColor: biometricService.isBiometricEnabled
-                        ? null
-                        : Colors.grey,
-                    onTap: biometricService.isBiometricEnabled
-                        ? _showAutoLockDialog
-                        : () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Enable biometric authentication first'),
-                              ),
-                            );
-                          },
-                  );
-                },
-              ),
-              const Divider(height: 1, indent: 56),
-              _buildModernListTile(
-                title: 'Lock App Now',
-                subtitle: 'Manually lock the application',
-                icon: Icons.lock_outline,
-                onTap: () async {
-                  final biometricService = ref.read(biometricServiceProvider);
-                  if (biometricService.isBiometricEnabled) {
-                    final appLockNotifier =
-                        ref.read(appLockStateProvider.notifier);
-                    await appLockNotifier.lockApp();
-                    context.go('/lock');
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Please enable biometric authentication first'),
-                      ),
-                    );
-                  }
-                },
-              ),
-              const Divider(height: 1, indent: 56),
-              _buildModernListTile(
-                title: 'Change Password',
-                subtitle: 'Update your account password',
-                icon: Icons.key_outlined,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content:
-                            Text('Change Password screen would open here')),
-                  );
-                },
-                isLast: true,
-              ),
             ],
           ),
 

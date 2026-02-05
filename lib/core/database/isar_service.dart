@@ -14,6 +14,7 @@ import '../../data/models/sync_change_model.dart';
 
 class IsarService {
   Isar? _isar;
+  bool _isInitializing = false;
 
   Isar get isar {
     if (_isar == null) {
@@ -23,32 +24,51 @@ class IsarService {
   }
 
   Future<void> init() async {
-    final dir = await getApplicationDocumentsDirectory();
+    if (_isar != null || _isInitializing) {
+      return; // Already initialized or in process
+    }
 
-    _isar ??= await Isar.open(
-      [
-        CompanySchema,
-        UserSchema,
-        CompanyUserSchema,
-        PartySchema,
-        UnitOfMeasureSchema,
-        ItemCategorySchema,
-        ProductSchema,
-        TransactionSchema,
-        TransactionLineSchema,
-        InvoiceSchema,
-        StockLedgerSchema,
-        PaymentAccountSchema,
-        PaymentInSchema,
-        PaymentInLineSchema,
-        PaymentOutSchema,
-        PaymentOutLineSchema,
-        AccountSchema,
-        AccountTransactionSchema,
-        SyncChangeSchema,
-      ],
-      directory: dir.path,
-      inspector: kDebugMode,
-    );
+    _isInitializing = true;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+
+      _isar ??= await Isar.open(
+        [
+          CompanySchema,
+          UserSchema,
+          CompanyUserSchema,
+          PartySchema,
+          UnitOfMeasureSchema,
+          ItemCategorySchema,
+          ProductSchema,
+          TransactionSchema,
+          TransactionLineSchema,
+          InvoiceSchema,
+          StockLedgerSchema,
+          PaymentAccountSchema,
+          PaymentInSchema,
+          PaymentInLineSchema,
+          PaymentOutSchema,
+          PaymentOutLineSchema,
+          AccountSchema,
+          AccountTransactionSchema,
+          SyncChangeSchema,
+        ],
+        directory: dir.path,
+        inspector: kDebugMode,
+      );
+    } catch (e) {
+      print('Failed to initialize Isar: $e');
+      rethrow;
+    } finally {
+      _isInitializing = false;
+    }
+  }
+
+  Future<void> close() async {
+    if (_isar != null) {
+      await _isar!.close();
+      _isar = null;
+    }
   }
 }

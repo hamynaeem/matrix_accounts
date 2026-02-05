@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiClient {
   final String baseUrl;
   final SharedPreferences prefs;
+  static const String _whatsappApiKey =
+      'sk_5fdb92a0e35fc302d65009777e79f76fbadb78e6591bc2d5b50bbc69c72cc71a';
 
   ApiClient({
     required this.baseUrl,
@@ -13,11 +15,19 @@ class ApiClient {
 
   String? get token => prefs.getString('auth_token');
   String? get deviceId => prefs.getString('device_id');
+  String get whatsappApiKey => _whatsappApiKey;
 
   Map<String, String> get headers => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
+        if (deviceId != null) 'X-Device-Id': deviceId!,
+      };
+
+  Map<String, String> get whatsappHeaders => {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-API-Key': _whatsappApiKey,
         if (deviceId != null) 'X-Device-Id': deviceId!,
       };
 
@@ -66,6 +76,49 @@ class ApiClient {
       headers: headers,
     );
 
+    return _handleResponse(response);
+  }
+
+  // WhatsApp API specific methods
+  Future<Map<String, dynamic>> sendWhatsAppMessage({
+    required String phoneNumber,
+    required String message,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/v1/send'),
+      headers: whatsappHeaders,
+      body: jsonEncode({
+        'to': phoneNumber,
+        'message': message,
+      }),
+    );
+
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> whatsappPost(
+    String endpoint,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: whatsappHeaders,
+      body: jsonEncode(data),
+    );
+
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> whatsappGet(
+    String endpoint, {
+    Map<String, String>? queryParams,
+  }) async {
+    var uri = Uri.parse('$baseUrl$endpoint');
+    if (queryParams != null) {
+      uri = uri.replace(queryParameters: queryParams);
+    }
+
+    final response = await http.get(uri, headers: whatsappHeaders);
     return _handleResponse(response);
   }
 

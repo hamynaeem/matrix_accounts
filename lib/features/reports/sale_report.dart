@@ -248,6 +248,11 @@ class _SaleReportScreenState extends ConsumerState<SaleReportScreen> {
   }
 
   Widget _buildDetailedReport(_SaleReportData data) {
+    final company = ref.watch(currentCompanyProvider);
+    if (company == null) {
+      return const Center(child: Text('No company selected'));
+    }
+
     // Group invoices by date
     final Map<String, List<Invoice>> invoicesByDate = {};
     for (final invoice in data.invoices) {
@@ -413,18 +418,40 @@ class _SaleReportScreenState extends ConsumerState<SaleReportScreen> {
                                       ],
                                     ),
                                   ),
-                                  Flexible(
-                                    child: Text(
-                                      _currencyFormat
-                                          .format(invoice.grandTotal),
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.picture_as_pdf,
+                                          color: Colors.red,
+                                          size: 20,
+                                        ),
+                                        onPressed: () => _generateInvoicePDF(
+                                            company, invoice, customer, lines),
+                                        tooltip:
+                                            'Generate PDF for this invoice',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 32,
+                                          minHeight: 32,
+                                        ),
                                       ),
-                                      textAlign: TextAlign.right,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          _currencyFormat
+                                              .format(invoice.grandTotal),
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green,
+                                          ),
+                                          textAlign: TextAlign.right,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -785,6 +812,10 @@ class _SaleReportScreenState extends ConsumerState<SaleReportScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
+                          child: pw.Text('-'), // Sale Man placeholder
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(6),
                           child: pw.Text(
                               item['weight'] == item['weight'].roundToDouble()
                                   ? item['weight'].toStringAsFixed(0)
@@ -905,6 +936,227 @@ class _SaleReportScreenState extends ConsumerState<SaleReportScreen> {
       _toDate = null;
       _selectedCustomer = null;
     });
+  }
+
+  Future<void> _generateInvoicePDF(Company company, Invoice invoice,
+      Party? customer, List<TransactionLine> lines) async {
+    final pdf = pw.Document();
+
+    // Calculate totals for this invoice
+    double totalAmount = 0;
+    double totalWeight = 0;
+
+    for (var line in lines) {
+      totalAmount += line.lineAmount;
+      totalWeight += line.quantity;
+    }
+
+    // Pre-load products for all lines
+    final List<pw.TableRow> dataRows = [];
+    for (final line in lines) {
+      final product =
+          line.productId != null ? await _getProduct(line.productId!) : null;
+      dataRows.add(pw.TableRow(
+        children: [
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(product?.name ?? 'Unknown Product'),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              line.quantity == line.quantity.roundToDouble()
+                  ? line.quantity.toStringAsFixed(0)
+                  : line.quantity.toStringAsFixed(2),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              line.unitPrice.toStringAsFixed(2),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              line.lineAmount.toStringAsFixed(2),
+              textAlign: pw.TextAlign.right,
+            ),
+          ),
+        ],
+      ));
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) => [
+          // Header
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      company.name,
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text(
+                      'Company Details',
+                      style: const pw.TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Invoice #${invoice.invoiceNumber}',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'Date: ${_dateFormat.format(invoice.invoiceDate)}',
+                    style: const pw.TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          pw.SizedBox(height: 20),
+
+          // Customer info
+          pw.Text(
+            'Customer: ${customer?.name ?? 'Unknown Customer'}',
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+
+          pw.SizedBox(height: 20),
+
+          // Items table
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(3),
+              1: const pw.FlexColumnWidth(1),
+              2: const pw.FlexColumnWidth(1),
+              3: const pw.FlexColumnWidth(1.5),
+            },
+            children: [
+              // Header
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      'Product',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      'Qty',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      'Rate',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      'Amount',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                ],
+              ),
+              // Data rows
+              ...dataRows,
+              // Total row
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: PdfColors.grey50),
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      'Total',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      totalWeight == totalWeight.roundToDouble()
+                          ? totalWeight.toStringAsFixed(0)
+                          : totalWeight.toStringAsFixed(2),
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(''),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text(
+                      totalAmount.toStringAsFixed(2),
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      textAlign: pw.TextAlign.right,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          pw.SizedBox(height: 20),
+
+          // Grand Total
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.end,
+            children: [
+              pw.Text(
+                'Grand Total: Rs ${invoice.grandTotal.toStringAsFixed(2)}',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../config/providers.dart';
 import '../services/biometric_service.dart';
+import '../utils/debug_utils.dart';
 
 /// Mixin to handle app lifecycle events and automatic locking
 mixin AppLifecycleMixin<T extends ConsumerStatefulWidget>
@@ -26,23 +27,27 @@ mixin AppLifecycleMixin<T extends ConsumerStatefulWidget>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
+    DebugUtils.logLifecycleEvent('App lifecycle changed to: ${state.name}');
+
     final biometricService = ref.read(biometricServiceProvider);
 
     switch (state) {
       case AppLifecycleState.resumed:
+        DebugUtils.logLifecycleEvent('App resumed, handling biometric check');
         _handleAppResumed(biometricService);
         break;
       case AppLifecycleState.paused:
+        DebugUtils.logLifecycleEvent('App paused, updating last active time');
         _handleAppPaused(biometricService);
         break;
       case AppLifecycleState.inactive:
-        // App is transitioning between foreground and background
+        DebugUtils.logLifecycleEvent('App inactive (transitioning)');
         break;
       case AppLifecycleState.detached:
-        // App is detached (rare state)
+        DebugUtils.logLifecycleEvent('App detached (rare state)');
         break;
       case AppLifecycleState.hidden:
-        // App is hidden (iOS specific)
+        DebugUtils.logLifecycleEvent('App hidden (iOS specific)');
         break;
     }
   }
@@ -56,6 +61,8 @@ mixin AppLifecycleMixin<T extends ConsumerStatefulWidget>
 
   Future<void> _handleAppResumed(BiometricService biometricService) async {
     if (!_wasInBackground || !biometricService.isBiometricEnabled) {
+      DebugUtils.logLifecycleEvent('Skipping auto-lock check',
+          context: 'Not from background or biometric disabled');
       return;
     }
 
@@ -63,16 +70,50 @@ mixin AppLifecycleMixin<T extends ConsumerStatefulWidget>
 
     // Check if app should auto-lock
     if (biometricService.shouldAutoLock()) {
+      DebugUtils.logLifecycleEvent(
+          'Auto-lock triggered, navigating to lock screen');
       await biometricService.lockApp();
 
-      // Navigate to lock screen
-      if (mounted && context.canPop()) {
-        // If we can pop, we're not at the root, so push lock screen
-        context.push('/lock');
+      // Navigate to lock screen with safety checks
+      if (mounted) {
+        try {
+          final currentLocation =
+              GoRouter.of(context).routeInformationProvider.value.location;
+          DebugUtils.logNavigationEvent('Current location check',
+              route: currentLocation);
+
+          if (currentLocation != '/lock') {
+            if (context.canPop()) {
+              // If we can pop, we're not at the root, so push lock screen
+              DebugUtils.logNavigationEvent('Pushing lock screen (non-root)');
+              context.push('/lock');
+            } else {
+              // We're at root level, replace with lock screen
+              DebugUtils.logNavigationEvent('Navigating to lock screen (root)');
+              context.go('/lock');
+            }
+          } else {
+            DebugUtils.logNavigationEvent(
+                'Already on lock screen, skipping navigation');
+          }
+        } catch (e) {
+          // If navigation fails, try a safer approach
+          DebugUtils.logError('Navigation error in app resume',
+              error: e, tag: 'Navigation');
+          try {
+            context.go('/lock');
+            DebugUtils.logNavigationEvent('Fallback navigation successful');
+          } catch (e2) {
+            DebugUtils.logError('Fallback navigation also failed',
+                error: e2, tag: 'Navigation');
+          }
+        }
       } else {
-        // We're at root level, replace with lock screen
-        context.go('/lock');
+        DebugUtils.logWarning('Widget not mounted, skipping navigation',
+            tag: 'Navigation');
       }
+    } else {
+      DebugUtils.logLifecycleEvent('Auto-lock not required');
     }
   }
 }

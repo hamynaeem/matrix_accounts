@@ -211,6 +211,11 @@ class _PurchaseReportScreenState extends ConsumerState<PurchaseReportScreen> {
   }
 
   Widget _buildDetailedReport(_PurchaseReportData data) {
+    final company = ref.watch(currentCompanyProvider);
+    if (company == null) {
+      return const Center(child: Text('No company selected'));
+    }
+
     // Group invoices by date
     final Map<String, List<Invoice>> invoicesByDate = {};
     for (final invoice in data.invoices) {
@@ -382,18 +387,43 @@ class _PurchaseReportScreenState extends ConsumerState<PurchaseReportScreen> {
                                       ],
                                     ),
                                   ),
-                                  Flexible(
-                                    child: Text(
-                                      _currencyFormat
-                                          .format(invoice.grandTotal),
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.picture_as_pdf,
+                                          color: Colors.red,
+                                          size: 20,
+                                        ),
+                                        onPressed: () => _generateInvoicePDF(
+                                            data.company!,
+                                            invoice,
+                                            supplier,
+                                            lines),
+                                        tooltip:
+                                            'Generate PDF for this invoice',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 32,
+                                          minHeight: 32,
+                                        ),
                                       ),
-                                      textAlign: TextAlign.right,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          _currencyFormat
+                                              .format(invoice.grandTotal),
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green,
+                                          ),
+                                          textAlign: TextAlign.right,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -652,6 +682,7 @@ class _PurchaseReportScreenState extends ConsumerState<PurchaseReportScreen> {
     return _PurchaseReportData(
       invoices: invoices,
       suppliers: suppliers,
+      company: await isar.companys.get(companyId),
     );
   }
 
@@ -890,14 +921,237 @@ class _PurchaseReportScreenState extends ConsumerState<PurchaseReportScreen> {
       _selectedSupplier = null;
     });
   }
+
+  Future<void> _generateInvoicePDF(Company company, Invoice invoice,
+      Party? supplier, List<TransactionLine> lines) async {
+    final pdf = pw.Document();
+
+    // Calculate totals for this invoice
+    double totalAmount = 0;
+    double totalWeight = 0;
+
+    for (var line in lines) {
+      totalAmount += line.lineAmount;
+      totalWeight += line.quantity;
+    }
+
+    // Pre-build the table rows to avoid async operations in the build function
+    List<pw.TableRow> tableRows = [
+      // Header
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        children: [
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              'Product',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              'Qty',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              'Rate',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              'Amount',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    ];
+
+    // Add data rows
+    for (var line in lines) {
+      final product = await _getProduct(line.productId);
+      tableRows.add(
+        pw.TableRow(
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text(product?.name ?? 'Unknown Product'),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text(
+                line.quantity == line.quantity.roundToDouble()
+                    ? line.quantity.toStringAsFixed(0)
+                    : line.quantity.toStringAsFixed(2),
+                textAlign: pw.TextAlign.center,
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text(
+                line.unitPrice.toStringAsFixed(2),
+                textAlign: pw.TextAlign.center,
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text(
+                line.lineAmount.toStringAsFixed(2),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Add total row
+    tableRows.add(
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey50),
+        children: [
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              'Total',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              totalWeight == totalWeight.roundToDouble()
+                  ? totalWeight.toStringAsFixed(0)
+                  : totalWeight.toStringAsFixed(2),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(''),
+          ),
+          pw.Padding(
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Text(
+              totalAmount.toStringAsFixed(2),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) => [
+          // Header
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      company.name,
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Purchase Invoice #${invoice.invoiceNumber}',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'Date: ${_dateFormat.format(invoice.invoiceDate)}',
+                    style: const pw.TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          pw.SizedBox(height: 20),
+
+          // Supplier info
+          pw.Text(
+            'Supplier: ${supplier?.name ?? 'Unknown Supplier'}',
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+
+          pw.SizedBox(height: 20),
+
+          // Items table
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(3),
+              1: const pw.FlexColumnWidth(1),
+              2: const pw.FlexColumnWidth(1),
+              3: const pw.FlexColumnWidth(1.5),
+            },
+            children: tableRows,
+          ),
+
+          pw.SizedBox(height: 20),
+
+          // Grand Total
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.end,
+            children: [
+              pw.Text(
+                'Grand Total: Rs ${invoice.grandTotal.toStringAsFixed(2)}',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
 }
 
 class _PurchaseReportData {
   final List<Invoice> invoices;
   final Map<int, Party> suppliers;
+  final Company? company;
 
   _PurchaseReportData({
     required this.invoices,
     required this.suppliers,
+    this.company,
   });
 }

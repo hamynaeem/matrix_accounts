@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/config/providers.dart';
 import '../../../core/database/dao/party_dao.dart';
 import '../../../core/database/dao/sales_dao.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../data/models/account_models.dart' as account_models;
 import '../../../data/models/company_model.dart';
 import '../../../data/models/inventory_models.dart';
@@ -1036,10 +1037,10 @@ class _SalesInvoiceFormScreenState
 
     return partyAsync.when(
       data: (parties) {
-        final customers =
-            parties.where((p) => p.partyType != PartyType.supplier).toList();
+        // Show all parties regardless of type
+        final allParties = parties.toList();
         final searchQuery = _customerSearchCtrl.text.toLowerCase();
-        final filtered = customers
+        final filtered = allParties
             .where((c) => c.name.toLowerCase().contains(searchQuery))
             .toList();
 
@@ -1081,7 +1082,7 @@ class _SalesInvoiceFormScreenState
                         setState(() {});
                       },
                       decoration: InputDecoration(
-                        hintText: _selectedCustomer?.name ?? 'Search Supplier',
+                        hintText: _selectedCustomer?.name ?? 'Search Party',
                         hintStyle: TextStyle(
                           color: _selectedCustomer?.name != null
                               ? Colors.grey.shade900
@@ -1224,7 +1225,7 @@ class _SalesInvoiceFormScreenState
                 // ),
                 constraints: BoxConstraints(
                   maxHeight: searchQuery.isEmpty
-                      ? (customers.length * (isTablet ? 65.0 : 55.0)) +
+                      ? (allParties.length * (isTablet ? 65.0 : 55.0)) +
                           (_selectedCustomer == null
                               ? (isTablet ? 70.0 : 60.0)
                               : 0)
@@ -1283,11 +1284,11 @@ class _SalesInvoiceFormScreenState
                         shrinkWrap: true,
                         physics: const ClampingScrollPhysics(),
                         itemCount: searchQuery.isEmpty
-                            ? customers.length
+                            ? allParties.length
                             : filtered.length,
                         itemBuilder: (context, index) {
                           final party = searchQuery.isEmpty
-                              ? customers[index]
+                              ? allParties[index]
                               : filtered[index];
                           return ListTile(
                             dense: true,
@@ -2518,7 +2519,7 @@ class _SalesInvoiceFormScreenState
             children: [
               CircularProgressIndicator(),
               SizedBox(width: 20),
-              Text('Generating invoice...'),
+              Text('Sending via WhatsApp...'),
             ],
           ),
         ),
@@ -2531,107 +2532,89 @@ class _SalesInvoiceFormScreenState
         return;
       }
 
-      // Generate invoice image
-      final imageBytes = await InvoiceGenerator.generateInvoiceImage(
-        company: invoiceData['company'],
-        party: invoiceData['customer'],
-        invoice: invoiceData['invoice'],
-        transaction: invoiceData['transaction'],
-        lineItems: invoiceData['lineItems'],
-        paymentLines: invoiceData['paymentDetails'],
-        customerBalance: invoiceData['customerBalance'],
-        openingBalance: invoiceData['openingBalance'],
-      );
-
-      // Save image to temporary directory
-      final tempDir = await getTemporaryDirectory();
-      final fileName =
-          'invoice_${invoiceData['transaction'].referenceNo}_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File('${tempDir.path}/$fileName');
-      await file.writeAsBytes(imageBytes);
+      final customer = invoiceData['customer'] as Party;
+      final transaction = invoiceData['transaction'] as Transaction;
+      final invoice = invoiceData['invoice'] as Invoice;
 
       if (mounted) Navigator.pop(context); // Close loading dialog
 
-      // Create WhatsApp message
-      final customer = invoiceData['customer'] as Party;
-      final transaction = invoiceData['transaction'] as Transaction;
-      final message =
-          'Hi ${customer.name},\n\nPlease find attached your invoice ${transaction.referenceNo}.\n\nThank you for your business!\n\nBest regards,\n${company.name}';
+      // Use enhanced WhatsApp service with automatic phone detection
+      final whatsappService = WhatsAppService();
 
-      // Try multiple WhatsApp URL schemes to ensure it opens
-      final List<String> whatsappUrls = [
-        'whatsapp://send?text=${Uri.encodeComponent(message)}',
-        'https://wa.me/?text=${Uri.encodeComponent(message)}',
-        'https://api.whatsapp.com/send?text=${Uri.encodeComponent(message)}',
-      ];
-
-      bool whatsappOpened = false;
-
-      // Try each WhatsApp URL until one works
-      for (String url in whatsappUrls) {
-        try {
-          if (await canLaunchUrl(Uri.parse(url))) {
-            await launchUrl(
-              Uri.parse(url),
-              mode: LaunchMode.externalApplication,
-            );
-            whatsappOpened = true;
-            print('Successfully opened WhatsApp with URL: $url');
-            break;
-          }
-        } catch (e) {
-          print('Failed to launch WhatsApp with URL $url: $e');
-          continue;
-        }
+      // Extract customer phone number from various sources
+      String? customerPhone = customer.phone;
+      if (customerPhone == null || customerPhone.isEmpty) {
+        // Try to extract from customer name or address
+        customerPhone = WhatsAppService.extractPhoneNumber(customer.name) ??
+            WhatsAppService.extractPhoneNumber(customer.address);
       }
 
-      // Show success or fallback message
-      if (whatsappOpened) {
-        // Wait a moment for WhatsApp to open
-        await Future.delayed(const Duration(milliseconds: 1500));
-
-        // Now share the image - user can attach it in the opened WhatsApp
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'Invoice ${transaction.referenceNo}',
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('WhatsApp opened! The invoice image is ready to share.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      } else {
-        // WhatsApp couldn't be opened, use general share
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: message,
-          subject: 'Invoice ${transaction.referenceNo}',
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('WhatsApp not available. Using system share instead.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
+      final success = await whatsappService.shareInvoice(
+        invoiceNumber: transaction.referenceNo ?? 'N/A',
+        amount: invoice.grandTotal,
+        currency: 'Rs',
+        customerName: customer.name,
+        customerPhone: customerPhone,
+        invoiceType: 'Sales Invoice',
+        additionalDetails:
+            'Date: ${invoice.invoiceDate.toString().split(' ')[0]}',
+      );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invoice shared successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (success) {
+          // Also generate and share the invoice image if phone number was found
+          if (customerPhone != null && customerPhone.isNotEmpty) {
+            // Generate invoice image for attachment
+            final imageBytes = await InvoiceGenerator.generateInvoiceImage(
+              company: invoiceData['company'],
+              party: invoiceData['customer'],
+              invoice: invoiceData['invoice'],
+              transaction: invoiceData['transaction'],
+              lineItems: invoiceData['lineItems'],
+              paymentLines: invoiceData['paymentDetails'],
+              customerBalance: invoiceData['customerBalance'],
+              openingBalance: invoiceData['openingBalance'],
+            );
+
+            // Save image to temporary directory
+            final tempDir = await getTemporaryDirectory();
+            final fileName =
+                'invoice_${transaction.referenceNo}_${DateTime.now().millisecondsSinceEpoch}.png';
+            final file = File('${tempDir.path}/$fileName');
+            await file.writeAsBytes(imageBytes);
+
+            // Share the image as well
+            await Share.shareXFiles(
+              [XFile(file.path)],
+              text: 'Invoice attachment for ${customer.name}',
+            );
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Invoice sent to ${customer.name} via WhatsApp!'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Invoice shared via WhatsApp! (No phone number found for direct messaging)'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Failed to send via WhatsApp. Please check customer phone number.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:matrix_accounts/features/cash_in_hand.dart';
 import 'package:matrix_accounts/features/expenses/presentation/expense_list_screen.dart';
 import 'package:matrix_accounts/features/inventory/presentation/product_list_screen.dart';
 import 'package:matrix_accounts/features/parties/presentation/party_list_screen.dart';

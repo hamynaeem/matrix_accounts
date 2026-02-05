@@ -1,6 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import '../config/whatsapp_config.dart';
 
 /// Service for WhatsApp integration and sharing functionality
 class WhatsAppService {
@@ -27,7 +31,9 @@ class WhatsAppService {
   Future<bool> shareText(String text, {String? phoneNumber}) async {
     try {
       if (phoneNumber != null && phoneNumber.isNotEmpty) {
-        return await _shareToContact(text, phoneNumber);
+        // Try API first, fallback to direct sharing
+        return await sendMessageViaAPI(phoneNumber, text) ||
+            await _shareToContact(text, phoneNumber);
       } else {
         return await _shareToWhatsApp(text);
       }
@@ -35,6 +41,94 @@ class WhatsAppService {
       print('Error sharing to WhatsApp: $e');
       return false;
     }
+  }
+
+  /// Send message via WhatsApp API
+  /// [phoneNumber] - Phone number to send to
+  /// [message] - Message content
+  Future<bool> sendMessageViaAPI(String phoneNumber, String message) async {
+    if (!WhatsAppConfig.enableApiIntegration) {
+      return await _openWhatsAppDirectly(phoneNumber, message);
+    }
+
+    try {
+      final cleanNumber = _cleanPhoneNumber(phoneNumber);
+
+      final response = await http
+          .post(
+            Uri.parse('${WhatsAppConfig.apiBaseUrl}/v1/send'),
+            headers: {
+              'X-API-Key': WhatsAppConfig.apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'to': cleanNumber,
+              'message': message,
+            }),
+          )
+          .timeout(Duration(seconds: WhatsAppConfig.apiTimeoutSeconds));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        print('WhatsApp API message sent successfully');
+        return true;
+      } else {
+        print('WhatsApp API Error: ${response.statusCode} - ${response.body}');
+        // Fallback to direct WhatsApp opening
+        return await _openWhatsAppDirectly(cleanNumber, message);
+      }
+    } catch (e) {
+      print('WhatsApp API Exception: $e');
+      // Fallback to direct WhatsApp opening
+      return await _openWhatsAppDirectly(
+          _cleanPhoneNumber(phoneNumber), message);
+    }
+  }
+
+  /// Open WhatsApp directly with message
+  Future<bool> _openWhatsAppDirectly(String phoneNumber, String message) async {
+    try {
+      final encodedMessage = Uri.encodeComponent(message);
+      final whatsappUrl =
+          'https://wa.me/${phoneNumber.replaceAll('+', '')}?text=$encodedMessage';
+
+      if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
+        await launchUrl(
+          Uri.parse(whatsappUrl),
+          mode: LaunchMode.externalApplication,
+        );
+        return true;
+      } else {
+        // Fallback to share
+        await Share.share('$message\n\nContact: $phoneNumber');
+        return true;
+      }
+    } catch (e) {
+      print('Error opening WhatsApp: $e');
+      return false;
+    }
+  }
+
+  /// Extract phone number from text using various patterns
+  static String? extractPhoneNumber(String? text) {
+    if (text == null || text.isEmpty) return null;
+
+    // Pakistani mobile number patterns and international formats
+    final patterns = [
+      RegExp(r'\+92[0-9]{10}'), // +92xxxxxxxxxx
+      RegExp(r'92[0-9]{10}'), // 92xxxxxxxxxx
+      RegExp(r'03[0-9]{9}'), // 03xxxxxxxxx
+      RegExp(r'\b[0-9]{11}\b'), // 11 digit numbers
+      RegExp(r'\+[0-9]{10,15}'), // International format
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(text);
+      if (match != null) {
+        return match.group(0);
+      }
+    }
+
+    return null;
   }
 
   /// Share a file to WhatsApp
@@ -152,36 +246,79 @@ class WhatsAppService {
     }
   }
 
-  /// Share invoice or receipt information
+  /// Share invoice or receipt information with automatic phone detection
   /// [invoiceNumber] - Invoice/receipt number
   /// [amount] - Total amount
   /// [currency] - Currency symbol
   /// [customerName] - Customer name
+  /// [customerPhone] - Customer phone number
+  /// [invoiceType] - Type of invoice (Sales/Purchase)
   /// [additionalDetails] - Optional additional details
   Future<bool> shareInvoice({
     required String invoiceNumber,
     required double amount,
     required String currency,
     required String customerName,
+    String? customerPhone,
+    String? invoiceType,
     String? additionalDetails,
   }) async {
     try {
       final buffer = StringBuffer();
-      buffer.writeln('🧾 Invoice Details');
+      buffer.writeln('🧾 ${invoiceType ?? 'Invoice'} Details');
+      buffer.writeln('');
+      buffer.writeln('Dear $customerName,');
+      buffer.writeln('');
       buffer.writeln('Invoice #: $invoiceNumber');
-      buffer.writeln('Customer: $customerName');
       buffer.writeln('Amount: $currency ${amount.toStringAsFixed(2)}');
 
       if (additionalDetails != null && additionalDetails.isNotEmpty) {
-        buffer.writeln('\nDetails:');
+        buffer.writeln('');
+        buffer.writeln('Details:');
         buffer.writeln(additionalDetails);
       }
 
-      return await shareText(buffer.toString());
+      buffer.writeln('');
+      buffer.writeln('Thank you for your business!');
+      buffer.writeln('');
+      buffer.writeln('Best regards,');
+      buffer.writeln('Matrix Accounts');
+
+      final message = buffer.toString();
+
+      // Try to extract phone number from customer data
+      String? phoneNumber = customerPhone;
+      if (phoneNumber == null || phoneNumber.isEmpty) {
+        // Try to extract from customer name or additional details
+        phoneNumber = extractPhoneNumber(customerName) ??
+            extractPhoneNumber(additionalDetails);
+      }
+
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        print('Sending invoice via WhatsApp to: $phoneNumber');
+        return await shareText(message, phoneNumber: phoneNumber);
+      } else {
+        print('No phone number found, using regular share');
+        return await shareText(message);
+      }
     } catch (e) {
       print('Error sharing invoice: $e');
       return false;
     }
+  }
+
+  /// Share invoice with auto-detected phone number from party data
+  /// [invoiceData] - Map containing invoice information
+  Future<bool> shareInvoiceAuto(Map<String, dynamic> invoiceData) async {
+    return await shareInvoice(
+      invoiceNumber: invoiceData['invoiceNumber'] ?? '',
+      amount: invoiceData['amount']?.toDouble() ?? 0.0,
+      currency: invoiceData['currency'] ?? 'Rs',
+      customerName: invoiceData['customerName'] ?? 'Customer',
+      customerPhone: invoiceData['customerPhone'],
+      invoiceType: invoiceData['invoiceType'],
+      additionalDetails: invoiceData['additionalDetails'],
+    );
   }
 
   /// Internal method to share content to WhatsApp
@@ -211,13 +348,30 @@ class WhatsAppService {
   }
 
   /// Clean phone number by removing non-numeric characters except +
+  /// Handles Pakistani phone number formats specifically
   String _cleanPhoneNumber(String phoneNumber) {
     // Remove all characters except numbers and +
     String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
 
-    // Ensure it starts with + if it doesn't already
-    if (!cleaned.startsWith('+')) {
+    // Handle Pakistani numbers specifically (or use configured country code)
+    final countryCode = WhatsAppConfig.defaultCountryCode.replaceAll('+', '');
+
+    if (cleaned.startsWith('03')) {
+      // Convert 03xxxxxxxxx to +92xxxxxxxxx (Pakistani format)
+      cleaned = '+$countryCode${cleaned.substring(1)}';
+    } else if (cleaned.startsWith(countryCode) &&
+        !cleaned.startsWith('+$countryCode')) {
+      // Add + if missing
       cleaned = '+$cleaned';
+    } else if (!cleaned.startsWith('+')) {
+      // If no country code, assume Pakistani
+      if (cleaned.length == 11 && cleaned.startsWith('03')) {
+        cleaned = '+$countryCode${cleaned.substring(1)}';
+      } else if (cleaned.length == 10) {
+        cleaned = '+$countryCode$cleaned';
+      } else {
+        cleaned = '+$cleaned';
+      }
     }
 
     return cleaned;

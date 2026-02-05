@@ -13,6 +13,7 @@ import '../../../core/config/providers.dart';
 import '../../../core/database/dao/party_dao.dart';
 import '../../../core/database/dao/purchase_dao.dart';
 import '../../../core/database/dao/sales_dao.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../data/models/account_models.dart' as account_models;
 import '../../../data/models/company_model.dart';
 import '../../../data/models/inventory_models.dart';
@@ -468,13 +469,25 @@ class _PurchaseInvoiceFormScreenState
             icon: const Icon(Icons.share),
             tooltip: 'Share Invoice',
             onSelected: (String value) {
-              if (value == 'pdf') {
+              if (value == 'whatsapp') {
+                _shareToWhatsApp(company);
+              } else if (value == 'pdf') {
                 _shareAsPDF(company);
               } else if (value == 'image') {
                 _shareAsImage(purchaseDao, company, user);
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'whatsapp',
+                child: Row(
+                  children: [
+                    Icon(Icons.chat, color: Colors.green),
+                    SizedBox(width: 12),
+                    Text('Share to WhatsApp'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'image',
                 child: Row(
@@ -2699,6 +2712,124 @@ class _PurchaseInvoiceFormScreenState
           ),
         );
       }
+    }
+  }
+
+  Future<void> _shareToWhatsApp(Company company) async {
+    if (widget.invoiceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please save the invoice first before sharing'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Sending via WhatsApp...'),
+            ],
+          ),
+        ),
+      );
+
+      final isar = ref.read(isarServiceProvider).isar;
+      final purchaseDao = ref.read(purchaseDaoProvider);
+
+      // Get invoice details
+      final invoice = await isar.invoices.get(widget.invoiceId!);
+      if (invoice == null) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      // Get supplier
+      final supplier = await isar.partys.get(invoice.partyId);
+      if (supplier == null) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      // Get transaction
+      final transaction = await isar.transactions.get(invoice.transactionId);
+      if (transaction == null) {
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      if (mounted) Navigator.pop(context); // Close loading dialog
+
+      // Use enhanced WhatsApp service with automatic phone detection
+      final whatsappService = WhatsAppService();
+
+      // Extract supplier phone number from various sources
+      String? supplierPhone = supplier.phone;
+      if (supplierPhone == null || supplierPhone.isEmpty) {
+        // Try to extract from supplier name or address
+        supplierPhone = WhatsAppService.extractPhoneNumber(supplier.name) ??
+            WhatsAppService.extractPhoneNumber(supplier.address);
+      }
+
+      final success = await whatsappService.shareInvoice(
+        invoiceNumber: transaction.referenceNo ?? 'N/A',
+        amount: invoice.grandTotal,
+        currency: 'Rs',
+        customerName: supplier.name,
+        customerPhone: supplierPhone,
+        invoiceType: 'Purchase Invoice',
+        additionalDetails:
+            'Date: ${invoice.invoiceDate.toString().split(' ')[0]}',
+      );
+
+      if (mounted) {
+        if (success && supplierPhone != null && supplierPhone.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Purchase invoice sent to ${supplier.name} via WhatsApp!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Invoice shared via WhatsApp! (No phone number found for direct messaging)'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Failed to send via WhatsApp. Please check supplier phone number.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog if open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sharing invoice: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      print('Error sharing to WhatsApp: $e');
     }
   }
 }

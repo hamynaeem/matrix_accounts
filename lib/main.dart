@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,12 +22,24 @@ import 'core/database/seed_data.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Global error handling
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     print('Flutter Error: ${details.exception}');
     print('Stack trace: ${details.stack}');
   };
 
+  // Add a global error zone
+  runZonedGuarded(() async {
+    await _initializeAndRunApp();
+  }, (error, stack) {
+    print('Unhandled error: $error');
+    print('Stack trace: $stack');
+  });
+}
+
+Future<void> _initializeAndRunApp() async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final authService = AuthService(prefs);
@@ -100,6 +112,18 @@ class MatrixAccountsApp extends ConsumerStatefulWidget {
 class _MatrixAccountsAppState extends ConsumerState<MatrixAccountsApp>
     with WidgetsBindingObserver, AppLifecycleMixin {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final router = buildRouter();
     final theme = ref.watch(themeProvider);
@@ -107,7 +131,7 @@ class _MatrixAccountsAppState extends ConsumerState<MatrixAccountsApp>
 
     // If app is locked and we're not on the lock screen, navigate to lock screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (appLockState == AppLockState.locked) {
+      if (mounted && appLockState == AppLockState.locked) {
         final currentLocation = router.routeInformationProvider.value.location;
         if (currentLocation != '/lock') {
           router.go('/lock');

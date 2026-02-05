@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print, unused_element
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -15,6 +16,8 @@ import '../../../data/models/company_model.dart';
 import '../../../data/models/invoice_stock_models.dart';
 import '../../../data/models/party_model.dart';
 import '../../../data/models/transaction_model.dart';
+
+enum ShareType { general, whatsapp }
 
 class InvoiceGenerator {
   static final _dateFormat = DateFormat('dd MMM, yyyy hh:mm a');
@@ -587,9 +590,21 @@ class InvoiceGenerator {
       yPos += 40;
 
       final picture = recorder.endRecording();
-      final img =
-          await picture.toImage(size.width.toInt(), size.height.toInt());
-      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      // Add timeout for image conversion operations
+      final img = await Future.any([
+        picture.toImage(size.width.toInt(), size.height.toInt()),
+        Future.delayed(const Duration(seconds: 15), () {
+          throw TimeoutException('Image conversion timed out');
+        }),
+      ]);
+
+      final byteData = await Future.any([
+        img.toByteData(format: ui.ImageByteFormat.png),
+        Future.delayed(const Duration(seconds: 10), () {
+          throw TimeoutException('Image byte data conversion timed out');
+        }),
+      ]);
 
       if (byteData == null) {
         throw Exception('Failed to generate image data');
@@ -597,6 +612,11 @@ class InvoiceGenerator {
 
       final imageBytes = byteData.buffer.asUint8List();
       print('Generated image with ${imageBytes.length} bytes');
+
+      // Dispose of resources to prevent memory leaks
+      picture.dispose();
+      img.dispose();
+
       return imageBytes;
     } catch (e) {
       print('Error generating invoice image: $e');
@@ -635,21 +655,159 @@ class InvoiceGenerator {
               ListTile(
                 leading: const Icon(Icons.image, color: Colors.blue),
                 title: const Text('Share as Image'),
+                subtitle: const Text('Share to any app'),
                 onTap: () async {
                   Navigator.pop(context);
-                  await _shareAsImage(company, party, invoice, transaction,
-                      lineItems, paymentLines, customerBalance, openingBalance);
+                  try {
+                    // Show loading dialog
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (BuildContext dialogContext) {
+                        return WillPopScope(
+                          onWillPop: () async => false,
+                          child: const AlertDialog(
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Generating invoice image...',
+                                  textAlign: TextAlign.center,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Please wait, this may take a few seconds',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+
+                    await _shareAsImage(
+                      company,
+                      party,
+                      invoice,
+                      transaction,
+                      lineItems,
+                      paymentLines,
+                      customerBalance,
+                      openingBalance,
+                    );
+
+                    // Close loading dialog
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  } catch (e) {
+                    // Close loading dialog if open
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+
+                    // Show error dialog
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext dialogContext) {
+                        return AlertDialog(
+                          title: const Text('Sharing Failed'),
+                          content: Text(e.toString()),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  }
                 },
               ),
-              // ListTile(
-              //   leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              //   title: const Text('Share as PDF'),
-              //   onTap: () async {
-              //     Navigator.pop(context);
-              //     await _shareAsPdf(company, party, invoice, transaction,
-              //         lineItems, paymentLines, customerBalance, openingBalance);
-              //   },
-              // ),
+              ListTile(
+                leading: Icon(Icons.chat, color: Colors.green[600]),
+                title: const Text('Share to WhatsApp'),
+                subtitle: const Text('Direct WhatsApp sharing'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    // Show loading dialog
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (BuildContext dialogContext) {
+                        return WillPopScope(
+                          onWillPop: () async => false,
+                          child: const AlertDialog(
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Preparing invoice for WhatsApp...',
+                                  textAlign: TextAlign.center,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Please wait, this may take a few seconds',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+
+                    await _shareAsImage(
+                      company,
+                      party,
+                      invoice,
+                      transaction,
+                      lineItems,
+                      paymentLines,
+                      customerBalance,
+                      openingBalance,
+                    );
+
+                    // Close loading dialog
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  } catch (e) {
+                    // Close loading dialog if open
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+
+                    // Show error dialog
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext dialogContext) {
+                        return AlertDialog(
+                          title: const Text('WhatsApp Sharing Failed'),
+                          content: Text(e.toString()),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  }
+                },
+              ),
             ],
           ),
         );
@@ -671,37 +829,72 @@ class InvoiceGenerator {
       print('Starting image generation for invoice ${transaction.referenceNo}');
       print('Line items count: ${lineItems.length}');
 
-      final imageBytes = await generateInvoiceImage(
-        company: company,
-        party: party,
-        invoice: invoice,
-        transaction: transaction,
-        lineItems: lineItems,
-        paymentLines: paymentLines,
-        customerBalance: customerBalance,
-        openingBalance: openingBalance,
-      );
+      // Add timeout to prevent hanging during image generation
+      final imageBytes = await Future.any([
+        generateInvoiceImage(
+          company: company,
+          party: party,
+          invoice: invoice,
+          transaction: transaction,
+          lineItems: lineItems,
+          paymentLines: paymentLines,
+          customerBalance: customerBalance,
+          openingBalance: openingBalance,
+        ),
+        Future.delayed(const Duration(seconds: 30), () {
+          throw TimeoutException(
+              'Invoice image generation timed out after 30 seconds');
+        }),
+      ]);
 
       print('Image generated successfully, size: ${imageBytes.length} bytes');
 
-      final tempDir = await getTemporaryDirectory();
+      // Add timeout for file operations
+      final tempDir =
+          await getTemporaryDirectory().timeout(const Duration(seconds: 5));
       final fileName =
           'invoice_${transaction.referenceNo}_${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File('${tempDir.path}/$fileName');
-      await file.writeAsBytes(imageBytes);
 
+      await file.writeAsBytes(imageBytes).timeout(const Duration(seconds: 10));
       print('Image saved to: ${file.path}');
 
+      // Add timeout for sharing operation
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Sales Invoice - ${transaction.referenceNo}',
-      );
+        text:
+            '''🧾 Sales Invoice - ${transaction.referenceNo}\n👤 Customer: ${party.name}\n📅 Date: ${_dateFormat.format(invoice.invoiceDate)}\n💰 Amount: Rs ${_currencyFormat.format(invoice.grandTotal)}\n\n📱 Generated by Matrix Accounts''',
+      ).timeout(const Duration(seconds: 15));
 
       print('Image shared successfully');
+
+      // Cleanup temporary file after some delay
+      Future.delayed(const Duration(seconds: 30), () {
+        try {
+          if (file.existsSync()) {
+            file.deleteSync();
+            print('Temporary file cleaned up: ${file.path}');
+          }
+        } catch (e) {
+          print('Warning: Could not cleanup temporary file: $e');
+        }
+      });
+    } on TimeoutException catch (e) {
+      print('Timeout error during invoice sharing: $e');
+      throw Exception('Invoice sharing timed out. Please try again.');
     } catch (e) {
       print('Error sharing image: $e');
-      // You might want to show a user-friendly error message here
-      rethrow;
+      // Provide more specific error messages
+      String errorMessage = 'Failed to share invoice';
+      if (e.toString().contains('permission')) {
+        errorMessage = 'Permission denied. Please check storage permissions.';
+      } else if (e.toString().contains('space')) {
+        errorMessage = 'Insufficient storage space.';
+      } else if (e.toString().contains('network') ||
+          e.toString().contains('connection')) {
+        errorMessage = 'Network error. Please check your connection.';
+      }
+      throw Exception(errorMessage);
     }
   }
 
@@ -957,23 +1150,37 @@ class InvoiceGenerator {
   static void _drawText(
       Canvas canvas, String text, Offset position, TextStyle style) {
     try {
+      // Validate inputs
+      if (text.isEmpty) {
+        print('Warning: Empty text provided to _drawText');
+        return;
+      }
+
       final textSpan = TextSpan(text: text, style: style);
       final textPainter = TextPainter(
         text: textSpan,
         textDirection: ui.TextDirection.ltr,
         textAlign: TextAlign.left,
+        maxLines: 1, // Prevent multi-line text issues
+        ellipsis: '...', // Handle overflow gracefully
       );
 
-      textPainter.layout();
+      // Add timeout for layout operation
+      textPainter.layout(
+          minWidth: 0, maxWidth: 800); // Set reasonable max width
 
-      // Add bounds checking
-      if (position.dx >= 0 && position.dy >= 0) {
+      // Enhanced bounds checking with canvas size validation
+      if (position.dx >= 0 &&
+          position.dy >= 0 &&
+          position.dx < 800 &&
+          position.dy < 1400) {
         textPainter.paint(canvas, position);
       } else {
-        print('Warning: Invalid text position $position for text: $text');
+        print('Warning: Invalid text position $position for text: "$text"');
       }
     } catch (e) {
       print('Error drawing text "$text" at $position: $e');
+      // Don't rethrow - continue with other drawing operations
     }
   }
 
@@ -1018,8 +1225,13 @@ class InvoiceGenerator {
     double? customerBalance,
     double? openingBalance,
   }) async {
-    await _shareAsImage(company, party, invoice, transaction, lineItems,
-        paymentLines, customerBalance, openingBalance);
+    try {
+      await _shareAsImage(company, party, invoice, transaction, lineItems,
+          paymentLines, customerBalance, openingBalance);
+    } catch (e) {
+      print('Error in shareAsImage: $e');
+      rethrow; // Let the calling code handle the error display
+    }
   }
 
   // // Direct share as PDF method

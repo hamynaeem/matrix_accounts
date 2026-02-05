@@ -16,9 +16,8 @@ class Settings_Screen extends ConsumerWidget {
           'Settings',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.grey.shade800,
-        elevation: 0,
+        backgroundColor: Colors.blueAccent,
+         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: Container(

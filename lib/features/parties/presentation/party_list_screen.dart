@@ -146,8 +146,7 @@ class _PartyListScreenState extends ConsumerState<PartyListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (selectedPartyType != null ||
-              searchQuery.isNotEmpty)
+          if (selectedPartyType != null || searchQuery.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -168,19 +167,19 @@ class _PartyListScreenState extends ConsumerState<PartyListScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                // Party Type Filters
-                _buildFilterChip(
-                  label: 'Customer',
-                  isSelected: selectedPartyType == PartyType.customer,
-                  onTap: () {
-                    setState(() {
-                      selectedPartyType =
-                          selectedPartyType == PartyType.customer
-                              ? null
-                              : PartyType.customer;
-                    });
-                  },
-                ),
+                // // Party Type Filters
+                // _buildFilterChip(
+                //   label: 'Customer',
+                //   isSelected: selectedPartyType == PartyType.customer,
+                //   onTap: () {
+                //     setState(() {
+                //       selectedPartyType =
+                //           selectedPartyType == PartyType.customer
+                //               ? null
+                //               : PartyType.customer;
+                //     });
+                //   },
+                // ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
                   label: 'Supplier',
@@ -195,17 +194,17 @@ class _PartyListScreenState extends ConsumerState<PartyListScreen> {
                   },
                 ),
                 const SizedBox(width: 8),
-                _buildFilterChip(
-                  label: 'Both',
-                  isSelected: selectedPartyType == PartyType.both,
-                  onTap: () {
-                    setState(() {
-                      selectedPartyType = selectedPartyType == PartyType.both
-                          ? null
-                          : PartyType.both;
-                    });
-                  },
-                ),
+                // _buildFilterChip(
+                //   label: 'Both',
+                //   isSelected: selectedPartyType == PartyType.both,
+                //   onTap: () {
+                //     setState(() {
+                //       selectedPartyType = selectedPartyType == PartyType.both
+                //           ? null
+                //           : PartyType.both;
+                //     });
+                //   },
+                // ),
               ],
             ),
           ),

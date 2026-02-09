@@ -39,13 +39,32 @@ class PurchaseDao {
     List<sales.PaymentLineInput>? paymentLines,
     int? userId,
   }) async {
+    final totalAmount = lines.fold(0.0, (sum, l) => sum + (l.qty * l.rate));
+
+    // Debug the amount calculation
+    print('=== PURCHASE DAO AMOUNT DEBUG ===');
+    print('Lines count: ${lines.length}');
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      print(
+          'Line $i: Qty=${line.qty}, Rate=${line.rate}, Amount=${line.qty * line.rate}');
+    }
+    print('Calculated totalAmount: $totalAmount');
+    print('Payment lines count: ${paymentLines?.length ?? 0}');
+    if (paymentLines != null) {
+      for (int i = 0; i < paymentLines.length; i++) {
+        print('Payment $i: Amount=${paymentLines[i].amount}');
+      }
+    }
+    print('===============================');
+
     final transaction = Transaction()
       ..companyId = companyId
       ..type = TransactionType.purchase
       ..date = date
       ..referenceNo = referenceNo
       ..partyId = supplier.id
-      ..totalAmount = lines.fold(0.0, (sum, l) => sum + (l.qty * l.rate))
+      ..totalAmount = totalAmount
       ..createdByUserId = userId;
 
     await isar.writeTxn(() async {

@@ -366,27 +366,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
           ),
 
-          _buildModernCard(
-            children: [
-              _buildModernListTile(
-                title: 'User Settings',
-                subtitle: 'Manage your profile and preferences',
-                icon: Icons.account_circle_outlined,
-                iconColor: Colors.blue,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                  );
-                },
-                isFirst: true,
-                isLast: true,
-              ),
-            ],
-          ),
-
           // General Section
           _buildSectionHeader('General'),
           _buildModernCard(
@@ -403,13 +382,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _saveSetting('enableNotifications', value);
                 },
                 isFirst: true,
-              ),
-              const Divider(height: 1, indent: 56),
-              _buildModernListTile(
-                title: 'Currency',
-                subtitle: _currency == 'PKR' ? 'Pakistani Rupee' : 'US Dollar',
-                icon: Icons.monetization_on_outlined,
-                onTap: _showCurrencyDialog,
               ),
               const Divider(height: 1, indent: 56),
             ],

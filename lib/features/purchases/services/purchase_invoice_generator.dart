@@ -162,8 +162,8 @@ class PurchaseInvoiceGenerator {
         ..strokeWidth = 1;
       canvas.drawRect(const Rect.fromLTWH(40, 340, 720, 35), headerBorderPaint);
 
-      // Items
-      double subTotal = 0;
+      // Calculate totals from line items instead of relying on database values
+      double calculatedSubTotal = 0;
       double totalQuantity = 0;
       double totalRate = 0;
 
@@ -210,8 +210,11 @@ class PurchaseInvoiceGenerator {
                   0)
               .toDouble();
 
-          final amount = qty * rate;
-          subTotal += amount;
+          final amount = (line['amount'] as num?) != null
+              ? (line['amount'] as num).toDouble()
+              : qty * rate;
+
+          calculatedSubTotal += amount;
           totalQuantity += qty;
           totalRate += rate;
 
@@ -310,7 +313,7 @@ class PurchaseInvoiceGenerator {
               color: Colors.black87));
       _drawRightAlignedText(
           canvas,
-          'Rs ${_currencyFormat.format(subTotal)}',
+          'Rs ${_currencyFormat.format(calculatedSubTotal)}',
           Offset(740, yPos + 20),
           const TextStyle(
               fontSize: 16,
@@ -421,12 +424,19 @@ class PurchaseInvoiceGenerator {
 
       yPos += 20;
 
+      // Use calculated total instead of database value for accuracy
+      final totalToDisplay =
+          calculatedSubTotal > 0 ? calculatedSubTotal : invoice.grandTotal;
+
+      print(
+          'GENERATOR: Database total: ${invoice.grandTotal}, Calculated total: $calculatedSubTotal, Using: $totalToDisplay');
+
       // Total Amount - simple styling
       _drawText(canvas, 'Total Amount:', Offset(60, yPos),
           const TextStyle(fontSize: 14, color: Colors.black87));
       _drawText(
           canvas,
-          'Rs ${_currencyFormat.format(invoice.grandTotal)}',
+          'Rs ${_currencyFormat.format(totalToDisplay)}',
           Offset(600, yPos),
           const TextStyle(
               fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black));
@@ -443,7 +453,7 @@ class PurchaseInvoiceGenerator {
       yPos += 25;
 
       // Balance Amount - simple styling
-      final due = invoice.grandTotal - totalPaid;
+      final due = totalToDisplay - totalPaid;
       _drawText(canvas, 'Balance Amount:', Offset(60, yPos),
           const TextStyle(fontSize: 14, color: Colors.black87));
       _drawText(

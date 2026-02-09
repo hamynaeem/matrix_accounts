@@ -407,8 +407,16 @@ class _PurchaseInvoiceFormScreenState
     super.dispose();
   }
 
-  double get _subTotal =>
-      _lines.fold<double>(0, (sum, l) => sum + (l.qty * l.rate));
+  double get _subTotal {
+    final total = _lines.fold<double>(0, (sum, l) => sum + (l.qty * l.rate));
+    print('UI _subTotal calculation: $total (from ${_lines.length} lines)');
+    for (int i = 0; i < _lines.length; i++) {
+      final line = _lines[i];
+      print(
+          '  Line $i: Qty=${line.qty}, Rate=${line.rate}, Amount=${line.qty * line.rate}');
+    }
+    return total;
+  }
 
   double get _totalDiscount {
     if (_discountType == 'Flat') return _discountValue;
@@ -656,52 +664,6 @@ class _PurchaseInvoiceFormScreenState
                           : const Icon(Icons.save, color: Colors.white),
                       label: Text(
                         _isSaving ? 'Saving...' : 'Save',
-                        style: TextStyle(
-                          fontSize:
-                              MediaQuery.of(context).size.width > 600 ? 18 : 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                      width: MediaQuery.of(context).size.width > 600 ? 16 : 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isSaving
-                          ? null
-                          : () async {
-                              await _saveAndShareToWhatsApp(
-                                  purchaseDao, company, user);
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _isSaving ? Colors.grey : Colors.green.shade600,
-                        padding: EdgeInsets.symmetric(
-                            vertical: MediaQuery.of(context).size.width > 600
-                                ? 18
-                                : 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.share, color: Colors.white),
-                      label: Text(
-                        _isSaving
-                            ? 'Saving...'
-                            : (MediaQuery.of(context).size.width > 600
-                                ? 'Save & Share'
-                                : 'Share'),
                         style: TextStyle(
                           fontSize:
                               MediaQuery.of(context).size.width > 600 ? 18 : 16,
@@ -2919,9 +2881,8 @@ class _PurchaseInvoiceFormScreenState
           final account = await isar.accounts.get(payment.accountId);
           if (account != null) {
             // Try to find matching payment account, but handle gracefully if not found
-            final paymentAccount = paymentAccounts
-                .where((pa) => pa.id == account.id)
-                .firstOrNull;
+            final paymentAccount =
+                paymentAccounts.where((pa) => pa.id == account.id).firstOrNull;
 
             double amount =
                 payment.credit; // For purchases, we credit payment accounts
@@ -2940,6 +2901,44 @@ class _PurchaseInvoiceFormScreenState
       final openingBalance = supplier.openingBalance;
 
       if (mounted) Navigator.pop(context); // Close loading dialog
+
+      // Debug amounts before sharing
+      print('=== PURCHASE AMOUNT DEBUG ===');
+      print('Invoice ID: ${invoice.id}');
+      print('Invoice grandTotal: ${invoice.grandTotal}');
+      print('Transaction totalAmount: ${transaction.totalAmount}');
+      print('Total paid from payments: $totalPaidAmount');
+      print('Line items count: ${lineItems.length}');
+
+      double debugLineTotal = 0;
+      for (final item in lineItems) {
+        final itemAmount = item['amount'] ?? (item['qty'] * item['rate']);
+        debugLineTotal += itemAmount;
+        print(
+            'Item: ${item['productName']}, Qty: ${item['qty']}, Rate: ${item['rate']}, Amount: $itemAmount');
+      }
+      print('Debug calculated line total: $debugLineTotal');
+
+      if (paymentDetails != null) {
+        print('Payment details:');
+        for (final payment in paymentDetails) {
+          print('  ${payment['accountName']}: ${payment['amount']}');
+        }
+      }
+      print('===========================');
+
+      // Calculate accurate completion amounts from line items
+      double calculatedTotal = 0;
+      for (final item in lineItems) {
+        calculatedTotal += item['amount'] ?? (item['qty'] * item['rate']);
+      }
+
+      // Use calculated total if it differs from database value
+      final totalToUse =
+          calculatedTotal > 0 ? calculatedTotal : invoice.grandTotal;
+
+      print(
+          'Final amounts - Database: ${invoice.grandTotal}, Calculated: $calculatedTotal, Using: $totalToUse');
 
       // Generate comprehensive invoice image with all details
       final imageBytes =
@@ -2977,7 +2976,7 @@ class _PurchaseInvoiceFormScreenState
       // Share comprehensive invoice with image attachment
       final success = await whatsappService.shareInvoice(
         invoiceNumber: transaction.referenceNo ?? 'N/A',
-        amount: invoice.grandTotal,
+        amount: totalToUse,
         currency: 'Rs',
         customerName: supplier.name,
         customerPhone: supplierPhone,
@@ -2985,9 +2984,9 @@ class _PurchaseInvoiceFormScreenState
         additionalDetails: '''📄 Complete Invoice Details:
 📅 Date: ${invoice.invoiceDate.toString().split(' ')[0]}
 📦 Items: ${lineItems.length}
-💰 Total Amount: Rs ${invoice.grandTotal.toStringAsFixed(2)}
+💰 Total Amount: Rs ${totalToUse.toStringAsFixed(2)}
 💳 Paid Amount: Rs ${totalPaidAmount.toStringAsFixed(2)}
-⚖️ Balance Amount: Rs ${(invoice.grandTotal - totalPaidAmount).toStringAsFixed(2)}
+⚖️ Balance Amount: Rs ${(totalToUse - totalPaidAmount).toStringAsFixed(2)}
 ${supplierBalance != null ? '\n📊 Current Balance: Rs ${supplierBalance.toStringAsFixed(2)}' : ''}''',
       );
 
@@ -2997,9 +2996,9 @@ ${supplierBalance != null ? '\n📊 Current Balance: Rs ${supplierBalance.toStri
         text: '''🧾 Purchase Invoice - ${transaction.referenceNo}
 🏭 Supplier: ${supplier.name}
 📅 Date: ${invoice.invoiceDate.toString().split(' ')[0]}
-💰 Amount: Rs ${invoice.grandTotal.toStringAsFixed(2)}
+💰 Amount: Rs ${totalToUse.toStringAsFixed(2)}
 💳 Paid: Rs ${totalPaidAmount.toStringAsFixed(2)}
-⚖️ Balance: Rs ${(invoice.grandTotal - totalPaidAmount).toStringAsFixed(2)}
+⚖️ Balance: Rs ${(totalToUse - totalPaidAmount).toStringAsFixed(2)}
 
 📱 Generated by Matrix Accounts''',
       );
@@ -3012,14 +3011,7 @@ ${supplierBalance != null ? '\n📊 Current Balance: Rs ${supplierBalance.toStri
                 content: Text(
                     '✅ Purchase Invoice sent to ${supplier.name} via WhatsApp with complete details and image!'),
                 backgroundColor: Colors.green,
-                duration: const Duration(seconds: 4),
-                action: SnackBarAction(
-                  label: 'Great!',
-                  textColor: Colors.white,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  },
-                ),
+                duration: const Duration(seconds: 1),
               ),
             );
           } else {

@@ -1,13 +1,15 @@
-// ignore_for_file: avoid_print, avoid_unnecessary_containers, use_build_context_synchronously, unused_element, deprecated_member_use
+// ignore_for_file: avoid_print, avoid_unnecessary_containers, use_build_context_synchronously, unused_element, deprecated_member_use, avoid_init_to_null
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
-import 'package:matrix_accounts/data/models/invoice_stock_models.dart';
-import 'package:matrix_accounts/data/models/transaction_model.dart'
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../../data/models/invoice_stock_models.dart';
+import '../../../data/models/transaction_model.dart'
     show GetTransactionCollection;
-import 'package:matrix_accounts/features/parties/logic/party_provider.dart'
-    show partyListProvider;
+import '../../parties/logic/party_provider.dart' show partyListProvider;
 
 import '../../../core/config/providers.dart';
 import '../../../core/database/dao/party_dao.dart';
@@ -621,44 +623,95 @@ class _PurchaseInvoiceFormScreenState
               _buildPaymentLinesSection(),
               SizedBox(
                   height: MediaQuery.of(context).size.width > 600 ? 28 : 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSaving
-                      ? null
-                      : () async {
-                          await _savePurchaseInvoice(
-                              purchaseDao, company, user);
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isSaving ? Colors.grey : Colors.orange,
-                    padding: EdgeInsets.symmetric(
-                        vertical:
-                            MediaQuery.of(context).size.width > 600 ? 18 : 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isSaving
+                          ? null
+                          : () async {
+                              await _savePurchaseInvoice(
+                                  purchaseDao, company, user);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _isSaving ? Colors.grey : Colors.orange,
+                        padding: EdgeInsets.symmetric(
+                            vertical: MediaQuery.of(context).size.width > 600
+                                ? 18
+                                : 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save, color: Colors.white),
+                      label: Text(
+                        _isSaving ? 'Saving...' : 'Save',
+                        style: TextStyle(
+                          fontSize:
+                              MediaQuery.of(context).size.width > 600 ? 18 : 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.save, color: Colors.white),
-                  label: Text(
-                    _isSaving ? 'Saving...' : 'Save Purchase',
-                    style: TextStyle(
-                      fontSize:
-                          MediaQuery.of(context).size.width > 600 ? 18 : 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                  SizedBox(
+                      width: MediaQuery.of(context).size.width > 600 ? 16 : 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isSaving
+                          ? null
+                          : () async {
+                              await _saveAndShareToWhatsApp(
+                                  purchaseDao, company, user);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _isSaving ? Colors.grey : Colors.green.shade600,
+                        padding: EdgeInsets.symmetric(
+                            vertical: MediaQuery.of(context).size.width > 600
+                                ? 18
+                                : 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.share, color: Colors.white),
+                      label: Text(
+                        _isSaving
+                            ? 'Saving...'
+                            : (MediaQuery.of(context).size.width > 600
+                                ? 'Save & Share'
+                                : 'Share'),
+                        style: TextStyle(
+                          fontSize:
+                              MediaQuery.of(context).size.width > 600 ? 18 : 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -2162,6 +2215,48 @@ class _PurchaseInvoiceFormScreenState
     );
   }
 
+  // Save and share purchase invoice to WhatsApp
+  Future<void> _saveAndShareToWhatsApp(
+      PurchaseDao purchaseDao, Company company, User? user) async {
+    // Prevent multiple simultaneous saves
+    if (_isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      // First save the invoice
+      await _savePurchaseInvoice(purchaseDao, company, user);
+
+      // If save was successful and invoice ID is set, share to WhatsApp
+      if (widget.invoiceId != null) {
+        // Small delay to ensure UI state is updated
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          await _shareToWhatsApp(company);
+        }
+      }
+    } catch (e) {
+      print('Error in save and share: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving and sharing: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
   Future<void> _shareAsImage(
       PurchaseDao purchaseDao, Company company, User? user) async {
     try {
@@ -2736,7 +2831,7 @@ class _PurchaseInvoiceFormScreenState
             children: [
               CircularProgressIndicator(),
               SizedBox(width: 20),
-              Text('Sending via WhatsApp...'),
+              Text('Generating invoice and opening WhatsApp...'),
             ],
           ),
         ),
@@ -2749,6 +2844,12 @@ class _PurchaseInvoiceFormScreenState
       final invoice = await isar.invoices.get(widget.invoiceId!);
       if (invoice == null) {
         if (mounted) Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invoice not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
         return;
       }
 
@@ -2756,6 +2857,12 @@ class _PurchaseInvoiceFormScreenState
       final supplier = await isar.partys.get(invoice.partyId);
       if (supplier == null) {
         if (mounted) Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Supplier not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
         return;
       }
 
@@ -2763,22 +2870,111 @@ class _PurchaseInvoiceFormScreenState
       final transaction = await isar.transactions.get(invoice.transactionId);
       if (transaction == null) {
         if (mounted) Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
         return;
       }
 
+      // Get transaction lines for detailed invoice
+      final transactionLines =
+          await purchaseDao.getTransactionLines(transaction.id);
+
+      // Prepare line items with product names, quantities, rates, and amounts
+      final lineItems = <Map<String, dynamic>>[];
+      for (final txLine in transactionLines) {
+        if (txLine.productId != null) {
+          final product = await isar.products.get(txLine.productId!);
+          lineItems.add({
+            'productName': product?.name ?? 'Unknown Product',
+            'qty': txLine.quantity,
+            'rate': txLine.unitPrice,
+            'amount': txLine.quantity * txLine.unitPrice,
+          });
+        }
+      }
+
+      // Get payment details
+      final allAccountTransactions =
+          await isar.accountTransactions.where().findAll();
+      final payments = allAccountTransactions
+          .where((p) =>
+              p.companyId == company.id &&
+              p.referenceId == widget.invoiceId &&
+              p.transactionType ==
+                  account_models.TransactionType.purchaseInvoice)
+          .toList();
+
+      final paymentAccounts =
+          await ref.read(paymentDaoProvider).getPaymentAccounts(company.id);
+      double totalPaidAmount = 0;
+      List<Map<String, dynamic>>? paymentDetails;
+
+      if (payments.isNotEmpty) {
+        paymentDetails = [];
+        for (final payment in payments) {
+          final account = await isar.accounts.get(payment.accountId);
+          if (account != null) {
+            // Try to find matching payment account, but handle gracefully if not found
+            final paymentAccount = paymentAccounts
+                .where((pa) => pa.id == account.id)
+                .firstOrNull;
+
+            double amount =
+                payment.credit; // For purchases, we credit payment accounts
+            totalPaidAmount += amount;
+
+            paymentDetails!.add({
+              'accountName': paymentAccount?.accountName ?? account.name,
+              'amount': amount,
+            });
+          }
+        }
+      }
+
+      // Calculate supplier balances
+      final supplierBalance = await _getSupplierBalance(supplier.id);
+      final openingBalance = supplier.openingBalance;
+
       if (mounted) Navigator.pop(context); // Close loading dialog
 
-      // Use enhanced WhatsApp service with automatic phone detection
+      // Generate comprehensive invoice image with all details
+      final imageBytes =
+          await PurchaseInvoiceGenerator.generatePurchaseInvoiceImage(
+        company: company,
+        supplier: supplier,
+        invoice: invoice,
+        transaction: transaction,
+        lineItems: lineItems,
+        paymentLines: paymentDetails,
+        supplierBalance: supplierBalance,
+        openingBalance: openingBalance,
+      );
+
+      // Save image to temporary directory
+      final tempDir = await getTemporaryDirectory();
+      final fileName =
+          'purchase_invoice_${transaction.referenceNo}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(imageBytes);
+
+      // Use enhanced WhatsApp service
       final whatsappService = WhatsAppService();
 
       // Extract supplier phone number from various sources
       String? supplierPhone = supplier.phone;
       if (supplierPhone == null || supplierPhone.isEmpty) {
-        // Try to extract from supplier name or address
         supplierPhone = WhatsAppService.extractPhoneNumber(supplier.name) ??
             WhatsAppService.extractPhoneNumber(supplier.address);
       }
 
+      print('Attempting WhatsApp share for supplier: ${supplier.name}');
+      print('Phone number found: $supplierPhone');
+
+      // Share comprehensive invoice with image attachment
       final success = await whatsappService.shareInvoice(
         invoiceNumber: transaction.referenceNo ?? 'N/A',
         amount: invoice.grandTotal,
@@ -2786,46 +2982,111 @@ class _PurchaseInvoiceFormScreenState
         customerName: supplier.name,
         customerPhone: supplierPhone,
         invoiceType: 'Purchase Invoice',
-        additionalDetails:
-            'Date: ${invoice.invoiceDate.toString().split(' ')[0]}',
+        additionalDetails: '''📄 Complete Invoice Details:
+📅 Date: ${invoice.invoiceDate.toString().split(' ')[0]}
+📦 Items: ${lineItems.length}
+💰 Total Amount: Rs ${invoice.grandTotal.toStringAsFixed(2)}
+💳 Paid Amount: Rs ${totalPaidAmount.toStringAsFixed(2)}
+⚖️ Balance Amount: Rs ${(invoice.grandTotal - totalPaidAmount).toStringAsFixed(2)}
+${supplierBalance != null ? '\n📊 Current Balance: Rs ${supplierBalance.toStringAsFixed(2)}' : ''}''',
+      );
+
+      // Also share the detailed invoice image
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '''🧾 Purchase Invoice - ${transaction.referenceNo}
+🏭 Supplier: ${supplier.name}
+📅 Date: ${invoice.invoiceDate.toString().split(' ')[0]}
+💰 Amount: Rs ${invoice.grandTotal.toStringAsFixed(2)}
+💳 Paid: Rs ${totalPaidAmount.toStringAsFixed(2)}
+⚖️ Balance: Rs ${(invoice.grandTotal - totalPaidAmount).toStringAsFixed(2)}
+
+📱 Generated by Matrix Accounts''',
       );
 
       if (mounted) {
-        if (success && supplierPhone != null && supplierPhone.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Purchase invoice sent to ${supplier.name} via WhatsApp!'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        } else if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Invoice shared via WhatsApp! (No phone number found for direct messaging)'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
+        if (success) {
+          if (supplierPhone != null && supplierPhone.isNotEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    '✅ Purchase Invoice sent to ${supplier.name} via WhatsApp with complete details and image!'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: 'Great!',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  },
+                ),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                    '📱 Purchase Invoice shared successfully!\n(No phone number found, please select contact manually)'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: 'OK',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  },
+                ),
+              ),
+            );
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Failed to send via WhatsApp. Please check supplier phone number.'),
+            SnackBar(
+              content: const Text(
+                  '❌ Failed to share Purchase Invoice. Please ensure WhatsApp is installed.'),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  _shareToWhatsApp(company);
+                },
+              ),
             ),
           );
         }
       }
+
+      // Clean up temporary file after some delay
+      Future.delayed(const Duration(seconds: 30), () {
+        try {
+          if (file.existsSync()) {
+            file.deleteSync();
+            print('Temporary file cleaned up: ${file.path}');
+          }
+        } catch (e) {
+          print('Warning: Could not cleanup temporary file: $e');
+        }
+      });
     } catch (e) {
       if (mounted) {
         Navigator.of(context).pop(); // Close loading dialog if open
+        print('Error sharing purchase invoice: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error sharing invoice: $e'),
+            content: Text('❌ Error sharing Purchase Invoice: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                _shareToWhatsApp(company);
+              },
+            ),
           ),
         );
       }

@@ -3,9 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
-import 'package:matrix_accounts/data/models/transaction_model.dart';
-import 'package:matrix_accounts/features/parties/logic/party_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../data/models/transaction_model.dart';
+import '../../parties/logic/party_provider.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -551,11 +550,41 @@ class _SalesInvoiceFormScreenState
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
-              // Direct WhatsApp share button
-              IconButton(
+              // Share button for all invoices (new and existing)
+              PopupMenuButton<String>(
                 icon: const Icon(Icons.share),
-                tooltip: 'Share to WhatsApp',
-                onPressed: () => _shareToWhatsApp(company),
+                tooltip: 'Share Invoice',
+                onSelected: (String value) {
+                  if (value == 'whatsapp') {
+                    _shareToWhatsApp(company);
+                  } else if (value == 'pdf') {
+                    _shareAsPDF(company);
+                  } else if (value == 'image') {
+                    _shareAsImage(company);
+                  }
+                },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                  const PopupMenuItem<String>(
+                    value: 'whatsapp',
+                    child: Row(
+                      children: [
+                        Icon(Icons.chat, color: Colors.green),
+                        SizedBox(width: 12),
+                        Text('Share to WhatsApp'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'image',
+                    child: Row(
+                      children: [
+                        Icon(Icons.image, color: Colors.blue),
+                        SizedBox(width: 12),
+                        Text('Share as Image'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 16),
@@ -895,7 +924,7 @@ class _SalesInvoiceFormScreenState
                           ),
                         ),
                       ),
-                      SizedBox(width: isTablet ? 16 : 12),
+                      SizedBox(width: isTablet ? 12 : 8),
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
@@ -2550,7 +2579,7 @@ class _SalesInvoiceFormScreenState
       }
 
       final success = await whatsappService.shareInvoice(
-        invoiceNumber: transaction.referenceNo ?? 'N/A',
+        invoiceNumber: transaction.referenceNo,
         amount: invoice.grandTotal,
         currency: 'Rs',
         customerName: customer.name,

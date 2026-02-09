@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:matrix_accounts/features/settings/presentation/company_settings_screen.dart'
     show CompanySettingsScreen;
+import 'package:matrix_accounts/presentation/screens/login_screen.dart';
 import 'package:matrix_accounts/settings/financial_year_settings_screen.dart';
 import 'package:matrix_accounts/settings/lock_screen.dart';
 import 'package:matrix_accounts/settings/share_user_screen.dart';
@@ -356,6 +357,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const ShareUserScreen(),
+                    ),
+                  );
+                },
+                isFirst: true,
+                isLast: true,
+              ),
+            ],
+          ),
+
+          _buildModernCard(
+            children: [
+              _buildModernListTile(
+                title: 'User Settings',
+                subtitle: 'Manage your profile and preferences',
+                icon: Icons.account_circle_outlined,
+                iconColor: Colors.blue,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
                     ),
                   );
                 },

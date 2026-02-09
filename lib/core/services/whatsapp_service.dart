@@ -30,23 +30,42 @@ class WhatsAppService {
   /// [phoneNumber] - Optional phone number to send directly to a contact
   Future<bool> shareText(String text, {String? phoneNumber}) async {
     try {
+      print('WhatsApp shareText called with phone: $phoneNumber');
+
       if (phoneNumber != null && phoneNumber.isNotEmpty) {
-        // Try API first, fallback to direct sharing
-        return await sendMessageViaAPI(phoneNumber, text) ||
-            await _shareToContact(text, phoneNumber);
+        print('Attempting direct WhatsApp chat opening...');
+        // Always try direct opening for better user experience
+        return await _openWhatsAppDirectly(
+            _cleanPhoneNumber(phoneNumber), text);
       } else {
+        print('No phone number provided, using general share...');
         return await _shareToWhatsApp(text);
       }
     } catch (e) {
       print('Error sharing to WhatsApp: $e');
-      return false;
+      // Last resort fallback
+      try {
+        await Share.share(text, sharePositionOrigin: null);
+        return true;
+      } catch (fallbackError) {
+        print('Fallback share failed: $fallbackError');
+        return false;
+      }
     }
   }
 
-  /// Send message via WhatsApp API
+  /// Send message via WhatsApp API (now defaults to direct opening for better UX)
   /// [phoneNumber] - Phone number to send to
   /// [message] - Message content
   Future<bool> sendMessageViaAPI(String phoneNumber, String message) async {
+    // For better user experience, always use direct WhatsApp opening
+    // API integration can be enabled later if needed
+    print(
+        'Sending message via direct WhatsApp opening (API bypassed for better UX)');
+    return await _openWhatsAppDirectly(_cleanPhoneNumber(phoneNumber), message);
+
+    // Original API code kept for reference if needed later:
+    /*
     if (!WhatsAppConfig.enableApiIntegration) {
       return await _openWhatsAppDirectly(phoneNumber, message);
     }
@@ -82,26 +101,58 @@ class WhatsAppService {
       return await _openWhatsAppDirectly(
           _cleanPhoneNumber(phoneNumber), message);
     }
+    */
   }
 
   /// Open WhatsApp directly with message
   Future<bool> _openWhatsAppDirectly(String phoneNumber, String message) async {
     try {
+      final cleanNumber = phoneNumber.replaceAll('+', '').replaceAll(' ', '');
       final encodedMessage = Uri.encodeComponent(message);
-      final whatsappUrl =
-          'https://wa.me/${phoneNumber.replaceAll('+', '')}?text=$encodedMessage';
 
-      if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
-        await launchUrl(
-          Uri.parse(whatsappUrl),
-          mode: LaunchMode.externalApplication,
-        );
-        return true;
-      } else {
-        // Fallback to share
-        await Share.share('$message\n\nContact: $phoneNumber');
-        return true;
+      // Try multiple WhatsApp URL schemes for better compatibility
+      List<String> whatsappUrls = [
+        'whatsapp://send?phone=$cleanNumber&text=$encodedMessage', // Direct WhatsApp app scheme
+        'https://wa.me/$cleanNumber?text=$encodedMessage', // Universal WhatsApp link
+        'https://api.whatsapp.com/send?phone=$cleanNumber&text=$encodedMessage', // Alternative API link
+      ];
+
+      print('Attempting to open WhatsApp for number: $cleanNumber');
+      print(
+          'Message preview: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
+
+      // Try each URL scheme
+      for (String url in whatsappUrls) {
+        try {
+          print('Trying WhatsApp URL: $url');
+
+          bool canLaunch = await canLaunchUrl(Uri.parse(url))
+              .timeout(const Duration(seconds: 2));
+
+          if (canLaunch) {
+            print('Launching WhatsApp with URL: $url');
+            bool success = await launchUrl(
+              Uri.parse(url),
+              mode: LaunchMode.externalApplication,
+            ).timeout(const Duration(seconds: 3));
+
+            if (success) {
+              print('WhatsApp opened successfully');
+              return true;
+            }
+          }
+        } catch (e) {
+          print('Failed with URL $url: $e');
+          continue; // Try next URL
+        }
       }
+
+      // If all direct methods fail, fallback to share
+      print('All direct WhatsApp methods failed, using fallback share');
+      await Share.share('$message\n\n📱 Contact: +$cleanNumber',
+              sharePositionOrigin: null)
+          .timeout(const Duration(seconds: 5));
+      return true;
     } catch (e) {
       print('Error opening WhatsApp: $e');
       return false;
@@ -324,7 +375,38 @@ class WhatsAppService {
   /// Internal method to share content to WhatsApp
   Future<bool> _shareToWhatsApp(String text) async {
     try {
-      await Share.share(text, sharePositionOrigin: null);
+      // Try to open WhatsApp directly first
+      List<String> whatsappUrls = [
+        'whatsapp://send?text=${Uri.encodeComponent(text)}', // Direct app scheme
+        'https://wa.me/?text=${Uri.encodeComponent(text)}', // Universal link
+      ];
+
+      // Try direct WhatsApp opening first
+      for (String url in whatsappUrls) {
+        try {
+          bool canLaunch = await canLaunchUrl(Uri.parse(url))
+              .timeout(const Duration(seconds: 2));
+
+          if (canLaunch) {
+            bool success = await launchUrl(
+              Uri.parse(url),
+              mode: LaunchMode.externalApplication,
+            ).timeout(const Duration(seconds: 3));
+
+            if (success) {
+              print('WhatsApp opened directly');
+              return true;
+            }
+          }
+        } catch (e) {
+          print('Failed with URL $url: $e');
+          continue;
+        }
+      }
+
+      // Fallback to system share (will show WhatsApp as option)
+      await Share.share(text, sharePositionOrigin: null)
+          .timeout(const Duration(seconds: 8));
       return true;
     } catch (e) {
       print('Error in _shareToWhatsApp: $e');
@@ -336,19 +418,28 @@ class WhatsAppService {
   Future<bool> _shareToContact(String text, String phoneNumber) async {
     try {
       final cleanNumber = _cleanPhoneNumber(phoneNumber);
-      final shareText = '$text\n\nContact: $cleanNumber';
+      print('Sharing to WhatsApp contact: $cleanNumber');
 
-      // Use share_plus to share the content
-      await Share.share(shareText, sharePositionOrigin: null);
-      return true;
+      // Direct WhatsApp opening is now the primary method
+      return await _openWhatsAppDirectly(cleanNumber, text)
+          .timeout(const Duration(seconds: 8));
     } catch (e) {
       print('Error in _shareToContact: $e');
-      return false;
+
+      // Fallback to simple share with contact info
+      try {
+        await Share.share('$text\n\n📱 Contact: $phoneNumber',
+                sharePositionOrigin: null)
+            .timeout(const Duration(seconds: 5));
+        return true;
+      } catch (fallbackError) {
+        print('Fallback share also failed: $fallbackError');
+        return false;
+      }
     }
   }
 
   /// Clean phone number by removing non-numeric characters except +
-  /// Handles Pakistani phone number formats specifically
   String _cleanPhoneNumber(String phoneNumber) {
     // Remove all characters except numbers and +
     String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');

@@ -1,7 +1,78 @@
-/.dart_tool
-/.flutter-plugins-dependencies
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Web related
+lib/generated_plugin_registrant.dart
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# iOS related
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/.DS_Store
+**/ios/build/
+**/ios/DerivedData/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/.generated/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/Flutter/ephemeral
+
+# Coverage
+coverage/
+
+# Exceptions to above rules
+!/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
+
+# Custom documentation and development files (from original .gitignore)
 /ACCOUNTING_SYSTEM_DOCUMENTATION.md
-/analysis_options.yaml
 /BALANCE_SHEET_IMPLEMENTATION_REPORT.md
 /BEFORE_AFTER_COMPARISON.md
 /CASH_BANK_IMPLEMENTATION.md
@@ -19,7 +90,6 @@
 /PROFESSIONAL_DESIGN_SUMMARY.md
 /PROJECT_COMPLETION_SUMMARY.md
 /PURCHASE_ACCOUNTING_INTEGRATION.md
-/README.md
 /README_DESIGN_SYSTEM.md
 /TESTING_CHECKLIST.md
 /TESTING_GUIDE.md
